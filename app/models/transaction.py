@@ -12,9 +12,8 @@ from app.models.base import TimestampMixin
 class Transaction(db.Model, TimestampMixin):
     """Receita ou despesa.
 
-    credit_card_id, invoice_id e recurring_id fazem parte do DER completo
-    (ver ARCHITECTURE.md) mas só serão adicionados quando as tabelas
-    credit_cards, invoices e recurring_transactions existirem (fases futuras).
+    recurring_id faz parte do DER completo (ver ARCHITECTURE.md) mas só será
+    adicionado quando a tabela recurring_transactions existir (fase futura).
     """
 
     __tablename__ = "transactions"
@@ -24,6 +23,12 @@ class Transaction(db.Model, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False, index=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    credit_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("credit_cards.id"), nullable=True, index=True
+    )
+    invoice_id: Mapped[int | None] = mapped_column(
+        ForeignKey("invoices.id"), nullable=True, index=True
+    )
     type: Mapped[str] = mapped_column(String(10), nullable=False)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)

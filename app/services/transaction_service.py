@@ -5,7 +5,9 @@ from typing import Any
 from app.extensions import db
 from app.models.account import Account
 from app.models.category import Category
+from app.models.credit_card import CreditCard
 from app.models.transaction import Transaction
+from app.services import invoice_service
 from app.services.exceptions import NotFoundError, ValidationError
 
 
@@ -29,6 +31,15 @@ def _get_owned_category(user_id: int, category_id: int | None) -> Category | Non
     return category
 
 
+def _get_owned_credit_card(user_id: int, credit_card_id: int | None) -> CreditCard | None:
+    if credit_card_id is None:
+        return None
+    card = db.session.query(CreditCard).filter_by(id=credit_card_id, user_id=user_id).first()
+    if card is None:
+        raise ValidationError("credit_card_id inválido para este usuário.")
+    return card
+
+
 def get_transaction(user_id: int, transaction_id: int) -> Transaction:
     transaction = (
         db.session.query(Transaction).filter_by(id=transaction_id, user_id=user_id).first()
@@ -42,6 +53,7 @@ def list_transactions(
     user_id: int,
     account_id: int | None = None,
     category_id: int | None = None,
+    credit_card_id: int | None = None,
     type: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -54,6 +66,8 @@ def list_transactions(
         query = query.filter(Transaction.account_id == account_id)
     if category_id is not None:
         query = query.filter(Transaction.category_id == category_id)
+    if credit_card_id is not None:
+        query = query.filter(Transaction.credit_card_id == credit_card_id)
     if type is not None:
         query = query.filter(Transaction.type == type)
     if date_from is not None:
@@ -75,6 +89,7 @@ def create_transaction(
     user_id: int,
     account_id: int,
     category_id: int | None,
+    credit_card_id: int | None,
     type: str,
     description: str,
     amount: Decimal,
@@ -84,11 +99,16 @@ def create_transaction(
 ) -> Transaction:
     account = _get_owned_account(user_id, account_id)
     _get_owned_category(user_id, category_id)
+    card = _get_owned_credit_card(user_id, credit_card_id)
+
+    if card is not None and type != "expense":
+        raise ValidationError("Transações em cartão de crédito devem ser do tipo expense.")
 
     transaction = Transaction(
         user_id=user_id,
         account_id=account_id,
         category_id=category_id,
+        credit_card_id=credit_card_id,
         type=type,
         description=description,
         amount=amount,
@@ -96,17 +116,54 @@ def create_transaction(
         is_paid=is_paid,
         notes=notes,
     )
-    db.session.add(transaction)
 
-    if is_paid:
+    if card is not None:
+        invoice = invoice_service.get_or_create_open_invoice(user_id, card, date)
+        invoice_service.assert_invoice_open(invoice)
+        invoice_service.add_amount(invoice, amount)
+        transaction.invoice_id = invoice.id
+    elif is_paid:
         account.current_balance += _signed_amount(type, amount)
 
+    db.session.add(transaction)
     db.session.commit()
     return transaction
 
 
 def update_transaction(user_id: int, transaction_id: int, **fields: Any) -> Transaction:
     transaction = get_transaction(user_id, transaction_id)
+
+    if transaction.credit_card_id is not None:
+        return _update_card_transaction(user_id, transaction, fields)
+    return _update_regular_transaction(user_id, transaction, fields)
+
+
+def _update_card_transaction(user_id: int, transaction: Transaction, fields: dict) -> Transaction:
+    if "account_id" in fields or "date" in fields:
+        raise ValidationError(
+            "account_id e date não podem ser alterados em uma transação de cartão de "
+            "crédito, pois eles determinam a fatura a que ela pertence."
+        )
+
+    invoice = invoice_service.get_invoice(user_id, transaction.invoice_id)
+    invoice_service.assert_invoice_open(invoice)
+
+    new_amount = fields.get("amount", transaction.amount)
+    if new_amount != transaction.amount:
+        invoice_service.remove_amount(invoice, transaction.amount)
+        invoice_service.add_amount(invoice, new_amount)
+
+    for key in ("category_id", "description", "amount", "is_paid", "notes"):
+        if key in fields and fields[key] is not None:
+            setattr(transaction, key, fields[key])
+
+    db.session.commit()
+    return transaction
+
+
+def _update_regular_transaction(
+    user_id: int, transaction: Transaction, fields: dict
+) -> Transaction:
     old_account = _get_owned_account(user_id, transaction.account_id)
     old_effect = (
         _signed_amount(transaction.type, transaction.amount) if transaction.is_paid else Decimal(0)
@@ -135,10 +192,15 @@ def update_transaction(user_id: int, transaction_id: int, **fields: Any) -> Tran
 
 def delete_transaction(user_id: int, transaction_id: int) -> None:
     transaction = get_transaction(user_id, transaction_id)
-    account = _get_owned_account(user_id, transaction.account_id)
 
-    if transaction.is_paid:
-        account.current_balance -= _signed_amount(transaction.type, transaction.amount)
+    if transaction.credit_card_id is not None:
+        invoice = invoice_service.get_invoice(user_id, transaction.invoice_id)
+        invoice_service.assert_invoice_open(invoice)
+        invoice_service.remove_amount(invoice, transaction.amount)
+    else:
+        account = _get_owned_account(user_id, transaction.account_id)
+        if transaction.is_paid:
+            account.current_balance -= _signed_amount(transaction.type, transaction.amount)
 
     db.session.delete(transaction)
     db.session.commit()
