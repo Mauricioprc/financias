@@ -145,6 +145,7 @@ def _update_card_transaction(user_id: int, transaction: Transaction, fields: dic
             "crédito, pois eles determinam a fatura a que ela pertence."
         )
 
+    assert transaction.invoice_id is not None  # garantido por create_transaction
     invoice = invoice_service.get_invoice(user_id, transaction.invoice_id)
     invoice_service.assert_invoice_open(invoice)
 
@@ -194,6 +195,7 @@ def delete_transaction(user_id: int, transaction_id: int) -> None:
     transaction = get_transaction(user_id, transaction_id)
 
     if transaction.credit_card_id is not None:
+        assert transaction.invoice_id is not None  # garantido por create_transaction
         invoice = invoice_service.get_invoice(user_id, transaction.invoice_id)
         invoice_service.assert_invoice_open(invoice)
         invoice_service.remove_amount(invoice, transaction.amount)

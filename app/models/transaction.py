@@ -10,11 +10,7 @@ from app.models.base import TimestampMixin
 
 
 class Transaction(db.Model, TimestampMixin):
-    """Receita ou despesa.
-
-    recurring_id faz parte do DER completo (ver ARCHITECTURE.md) mas só será
-    adicionado quando a tabela recurring_transactions existir (fase futura).
-    """
+    """Receita ou despesa."""
 
     __tablename__ = "transactions"
     __table_args__ = (CheckConstraint("amount > 0", name="ck_transaction_amount_positive"),)
@@ -28,6 +24,9 @@ class Transaction(db.Model, TimestampMixin):
     )
     invoice_id: Mapped[int | None] = mapped_column(
         ForeignKey("invoices.id"), nullable=True, index=True
+    )
+    recurring_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recurring_transactions.id"), nullable=True, index=True
     )
     type: Mapped[str] = mapped_column(String(10), nullable=False)
     description: Mapped[str] = mapped_column(String(255), nullable=False)
