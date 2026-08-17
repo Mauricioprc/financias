@@ -802,8 +802,7 @@ a {
   }
 
   .btn--fab {
-    right: 32px;
-    bottom: 32px;
+    display: none;
   }
 
   .tiles {
