@@ -11,7 +11,7 @@ const INVESTMENT_TYPE_LABELS = {
 function renderInvestmentsView(container) {
   mountCrudView(container, {
     title: "Investimentos",
-    icon: "📈",
+    icon: "trending-up",
     emptyText: "Cadastre seu primeiro investimento.",
     fields: [
       { name: "name", label: "Nome", required: true },

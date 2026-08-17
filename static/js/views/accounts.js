@@ -10,7 +10,7 @@ const ACCOUNT_TYPE_LABELS = {
 function renderAccountsView(container) {
   mountCrudView(container, {
     title: "Contas",
-    icon: "🏦",
+    icon: "landmark",
     emptyText: "Cadastre sua primeira conta para começar.",
     fields: [
       { name: "name", label: "Nome", required: true },

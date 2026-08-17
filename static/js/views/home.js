@@ -67,7 +67,7 @@ async function renderHomeView(container) {
 
     container.appendChild(UI.el("div", { class: "section-title" }, "Contas"));
     if (accounts.length === 0) {
-      container.appendChild(emptyState("🏦", "Nenhuma conta cadastrada ainda."));
+      container.appendChild(emptyState(UI.icon("landmark"), "Nenhuma conta cadastrada ainda."));
     } else {
       const list = UI.el("div", { class: "list" });
       accounts.slice(0, 4).forEach((a) => {
@@ -95,7 +95,7 @@ async function renderHomeView(container) {
     container.appendChild(UI.el("div", { class: "section-title" }, "Últimas transações"));
     const transactions = txResp.data;
     if (transactions.length === 0) {
-      container.appendChild(emptyState("🧾", "Nenhuma transação registrada ainda."));
+      container.appendChild(emptyState(UI.icon("receipt"), "Nenhuma transação registrada ainda."));
     } else {
       const list = UI.el("div", { class: "list" });
       transactions.forEach((t) => list.appendChild(transactionRow(t)));

@@ -17,7 +17,7 @@ async function renderTransfersView(container) {
 
   mountCrudView(container, {
     title: "Transferências",
-    icon: "🔁",
+    icon: "arrow-left-right",
     emptyText: "Nenhuma transferência registrada ainda.",
     fields: [
       {

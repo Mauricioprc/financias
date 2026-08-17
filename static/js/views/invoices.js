@@ -41,7 +41,7 @@ async function renderInvoicesView(container, params) {
     if (invoices.length === 0) {
       container.appendChild(
         UI.el("div", { class: "empty-state" }, [
-          UI.el("div", { class: "empty-state__icon" }, "🧾"),
+          UI.el("div", { class: "empty-state__icon" }, UI.icon("receipt")),
           UI.el("div", {}, "Nenhuma fatura gerada ainda para este cartão."),
         ])
       );

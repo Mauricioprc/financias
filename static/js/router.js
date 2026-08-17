@@ -67,7 +67,7 @@ const Router = (() => {
       container.innerHTML = "";
       container.appendChild(
         UI.el("div", { class: "empty-state" }, [
-          UI.el("div", { class: "empty-state__icon" }, "🤔"),
+          UI.el("div", { class: "empty-state__icon" }, UI.icon("circle-help")),
           UI.el("div", {}, "Página não encontrada."),
         ])
       );

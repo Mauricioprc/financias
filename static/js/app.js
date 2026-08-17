@@ -1,15 +1,16 @@
 /* Bootstrap do app: monta header, navegação (bottom-nav mobile / sidebar desktop) e router. */
 
 const NAV_ITEMS = [
-  { path: "/", icon: "🏠", label: "Início", primary: true },
-  { path: "/transactions", icon: "💱", label: "Transações", primary: true },
-  { path: "/accounts", icon: "🏦", label: "Contas", primary: true },
-  { path: "/credit-cards", icon: "💳", label: "Cartões", primary: true },
-  { path: "/transfers", icon: "🔁", label: "Transferências" },
-  { path: "/categories", icon: "🏷️", label: "Categorias" },
-  { path: "/recurring", icon: "🔄", label: "Recorrências" },
-  { path: "/goals", icon: "🎯", label: "Metas" },
-  { path: "/investments", icon: "📈", label: "Investimentos" },
+  { path: "/", icon: "house", label: "Início", primary: true },
+  { path: "/transactions", icon: "arrow-left-right", label: "Transações", primary: true },
+  { path: "/accounts", icon: "landmark", label: "Contas", primary: true },
+  { path: "/credit-cards", icon: "credit-card", label: "Cartões", primary: true },
+  { path: "/reports", icon: "bar-chart-3", label: "Relatórios" },
+  { path: "/transfers", icon: "arrow-left-right", label: "Transferências" },
+  { path: "/categories", icon: "tag", label: "Categorias" },
+  { path: "/recurring", icon: "refresh-cw", label: "Recorrências" },
+  { path: "/goals", icon: "target", label: "Metas" },
+  { path: "/investments", icon: "trending-up", label: "Investimentos" },
 ];
 
 function isRoutePrefixOf(currentPath, itemPath) {
@@ -30,7 +31,7 @@ function buildBottomNav() {
           "data-path": item.path,
           onclick: () => Router.navigate(item.path),
         },
-        [UI.el("span", { class: "icon" }, item.icon), item.label]
+        [UI.icon(item.icon), item.label]
       )
     );
   });
@@ -39,7 +40,7 @@ function buildBottomNav() {
     UI.el(
       "button",
       { class: "bottom-nav__item", "data-path": "__more__", onclick: () => openMoreSheet() },
-      [UI.el("span", { class: "icon" }, "⋯"), "Mais"]
+      [UI.icon("more-horizontal"), "Mais"]
     )
   );
 }
@@ -53,7 +54,7 @@ function buildSidebar() {
       UI.el(
         "button",
         { class: "sidebar__item", "data-path": item.path, onclick: () => Router.navigate(item.path) },
-        [UI.el("span", { class: "icon" }, item.icon), item.label]
+        [UI.icon(item.icon), item.label]
       )
     );
   });
@@ -63,7 +64,7 @@ function buildSidebar() {
     UI.el(
       "button",
       { class: "sidebar__item", onclick: () => handleLogout() },
-      [UI.el("span", { class: "icon" }, "🚪"), "Sair"]
+      [UI.icon("log-out"), "Sair"]
     )
   );
 }
@@ -85,7 +86,7 @@ function openMoreSheet() {
             Router.navigate(item.path);
           },
         },
-        [UI.el("span", { class: "icon" }, item.icon), item.label]
+        [UI.icon(item.icon), item.label]
       )
     );
   });
@@ -100,7 +101,7 @@ function openMoreSheet() {
           handleLogout();
         },
       },
-      [UI.el("span", { class: "icon" }, "🚪"), "Sair"]
+      [UI.icon("log-out"), "Sair"]
     )
   );
 

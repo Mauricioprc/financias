@@ -5,7 +5,7 @@ const GOAL_STATUS_LABELS = { in_progress: "Em andamento", achieved: "Concluída"
 function renderGoalsView(container) {
   mountCrudView(container, {
     title: "Metas",
-    icon: "🎯",
+    icon: "target",
     emptyText: "Cadastre sua primeira meta financeira.",
     fields: [
       { name: "name", label: "Nome", required: true },

@@ -22,7 +22,7 @@ async function renderRecurringView(container) {
 
   mountCrudView(container, {
     title: "Recorrências",
-    icon: "🔄",
+    icon: "refresh-cw",
     emptyText: "Nenhuma transação recorrente cadastrada ainda.",
     fields: [
       { name: "account_id", label: "Conta", type: "select", required: true, options: accountOptions },

@@ -1,29 +1,92 @@
-/* MR Gestão — identidade visual baseada em static/img (azul-marinho, preto, branco) */
+/* MR Gestão — identidade visual: navy de marca evoluído para tema escuro técnico,
+   com um acento ciano ("vivo") para gráficos, links ativos e destaques. */
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/inter-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/inter-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url("/fonts/inter-800.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/space-grotesk-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/space-grotesk-700.woff2") format("woff2");
+}
 
 :root {
-  --navy: #163a5f;
-  --navy-dark: #0f2a45;
-  --navy-light: #24507f;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Space Grotesk", var(--font-sans);
+
+  /* Fundo (tema escuro é o padrão) */
+  --bg: #0b1220;
+  --bg-elevated: #0e1729;
+  --surface: #111c2e;
+  --surface-alpha: rgba(17, 28, 46, 0.72);
+  --border: #1e2c44;
+  --border-soft: #16233a;
+
+  /* Marca: navy vivo (mais claro/saturado que o navy original, para render sobre fundo escuro) */
+  --navy: #2a5f9e;
+  --navy-dark: #1c4a7a;
+  --navy-light: #3f7ec4;
+
+  /* Acento "vivo" — gráficos, links ativos, valores positivos, badges de destaque */
+  --accent: #22d3ee;
+  --accent-dark: #0e93ac;
+  --accent-soft: rgba(34, 211, 238, 0.14);
+
   --black: #14161a;
   --white: #ffffff;
-  --gray-50: #f5f7fa;
-  --gray-100: #eceff3;
-  --gray-200: #e2e6ec;
-  --gray-300: #d7dce3;
-  --gray-500: #8a93a3;
-  --gray-700: #4b5563;
-  --success: #16a34a;
-  --success-bg: #e9f9ef;
-  --danger: #dc2626;
-  --danger-bg: #fdecec;
-  --warning: #d97706;
-  --warning-bg: #fef3e2;
+  --gray-50: #0e1729;
+  --gray-100: #16233a;
+  --gray-200: #1e2c44;
+  --gray-300: #29394f;
+  --gray-500: #94a3b8;
+  --gray-700: #c3ccd9;
+
+  --text: #f4f6fa;
+  --text-secondary: #94a3b8;
+
+  --success: #34d399;
+  --success-bg: rgba(52, 211, 153, 0.14);
+  --danger: #f87171;
+  --danger-bg: rgba(248, 113, 113, 0.14);
+  --warning: #fbbf24;
+  --warning-bg: rgba(251, 191, 36, 0.14);
 
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
-  --shadow-sm: 0 1px 2px rgba(15, 42, 69, 0.06), 0 1px 1px rgba(15, 42, 69, 0.04);
-  --shadow-md: 0 4px 16px rgba(15, 42, 69, 0.10);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24), 0 1px 1px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.36);
   --header-h: 56px;
   --bottom-nav-h: 62px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -44,9 +107,9 @@ html, body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background: var(--gray-50);
-  color: var(--black);
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -98,6 +161,7 @@ a {
   border-radius: 50%;
   background: var(--white);
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .app-header__title {
@@ -146,10 +210,12 @@ a {
   bottom: 0;
   z-index: 30;
   display: flex;
-  background: var(--white);
-  border-top: 1px solid var(--gray-200);
+  background: var(--surface-alpha);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
   padding-bottom: var(--safe-bottom);
-  box-shadow: 0 -2px 10px rgba(15, 42, 69, 0.06);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.24);
 }
 
 .bottom-nav__item {
@@ -169,13 +235,35 @@ a {
   padding: 6px 2px;
 }
 
-.bottom-nav__item .icon {
-  font-size: 1.25rem;
-  line-height: 1;
+.bottom-nav__item.is-active {
+  color: var(--accent);
 }
 
-.bottom-nav__item.is-active {
-  color: var(--navy);
+/* ---------- Icons (Lucide SVGs inline) ---------- */
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.icon svg {
+  width: 1em;
+  height: 1em;
+  stroke: currentColor;
+}
+
+.bottom-nav__item .icon {
+  font-size: 1.3rem;
+}
+
+.sidebar__item .icon {
+  font-size: 1.15rem;
+}
+
+.sheet__item .icon {
+  font-size: 1.2rem;
 }
 
 /* ---------- Sidebar (desktop) ---------- */
@@ -185,8 +273,8 @@ a {
   flex-direction: column;
   width: 230px;
   flex-shrink: 0;
-  background: var(--white);
-  border-right: 1px solid var(--gray-200);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
   padding: 18px 10px;
   gap: 2px;
 }
@@ -207,10 +295,6 @@ a {
   width: 100%;
 }
 
-.sidebar__item .icon {
-  font-size: 1.1rem;
-}
-
 .sidebar__item:hover {
   background: var(--gray-100);
 }
@@ -222,7 +306,7 @@ a {
 
 .sidebar__divider {
   height: 1px;
-  background: var(--gray-200);
+  background: var(--border);
   margin: 8px 4px;
 }
 
@@ -231,7 +315,7 @@ a {
 .sheet-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 22, 33, 0.45);
+  background: rgba(0, 0, 0, 0.55);
   z-index: 40;
 }
 
@@ -241,7 +325,9 @@ a {
   right: 0;
   bottom: 0;
   z-index: 50;
-  background: var(--white);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom: none;
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: 10px 8px calc(16px + var(--safe-bottom));
   box-shadow: var(--shadow-md);
@@ -267,17 +353,13 @@ a {
   padding: 13px 14px;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--black);
+  color: var(--text);
   border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .sheet__item:hover {
   background: var(--gray-100);
-}
-
-.sheet__item .icon {
-  font-size: 1.15rem;
 }
 
 .sheet__item--danger {
@@ -302,8 +384,9 @@ a {
 .toast {
   padding: 12px 16px;
   border-radius: var(--radius-sm);
-  background: var(--black);
-  color: var(--white);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
   font-size: 0.88rem;
   box-shadow: var(--shadow-md);
   animation: toast-in 0.18s ease-out;
@@ -325,9 +408,10 @@ a {
 /* ---------- Generic building blocks ---------- */
 
 .page-title {
+  font-family: var(--font-display);
   font-size: 1.3rem;
-  font-weight: 800;
-  color: var(--navy-dark);
+  font-weight: 700;
+  color: var(--text);
   margin: 4px 0 16px;
 }
 
@@ -344,7 +428,10 @@ a {
 }
 
 .card {
-  background: var(--white);
+  background: var(--surface-alpha);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   padding: 16px;
@@ -366,7 +453,8 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: var(--white);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   padding: 14px 16px;
@@ -389,7 +477,7 @@ a {
 .list-item__title {
   font-weight: 700;
   font-size: 0.95rem;
-  color: var(--black);
+  color: var(--text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -509,7 +597,7 @@ a {
 
 .btn--secondary {
   background: var(--gray-100);
-  color: var(--black);
+  color: var(--text);
 }
 
 .btn--secondary:hover {
@@ -574,14 +662,14 @@ a {
   border-radius: var(--radius-sm);
   padding: 11px 12px;
   font-size: 0.95rem;
-  background: var(--white);
-  color: var(--black);
+  background: var(--bg-elevated);
+  color: var(--text);
 }
 
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid var(--navy-light);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -636,13 +724,14 @@ a {
   align-items: center;
   justify-content: center;
   padding: 24px 16px;
-  background: linear-gradient(180deg, var(--navy-dark) 0%, var(--navy) 55%, var(--gray-50) 55%);
+  background: radial-gradient(circle at 50% -10%, var(--navy-dark) 0%, var(--bg) 60%);
 }
 
 .auth-card {
   width: 100%;
   max-width: 380px;
-  background: var(--white);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   padding: 28px 24px;
@@ -653,13 +742,14 @@ a {
   height: 72px;
   border-radius: 50%;
   margin: 0 auto 12px;
-  background: var(--gray-50);
+  background: var(--bg-elevated);
 }
 
 .auth-card__brand {
+  font-family: var(--font-display);
   text-align: center;
-  font-weight: 800;
-  color: var(--navy-dark);
+  font-weight: 700;
+  color: var(--text);
   font-size: 1.15rem;
   margin-bottom: 2px;
 }
@@ -681,7 +771,7 @@ a {
 .auth-card__switch button {
   background: none;
   border: none;
-  color: var(--navy);
+  color: var(--accent);
   font-weight: 700;
   cursor: pointer;
   padding: 0;
@@ -697,7 +787,8 @@ a {
 }
 
 .tile {
-  background: var(--white);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-sm);
   padding: 14px;
@@ -705,7 +796,8 @@ a {
 
 .tile--wide {
   grid-column: 1 / -1;
-  background: var(--navy);
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-dark) 100%);
+  border-color: transparent;
   color: var(--white);
 }
 
@@ -722,30 +814,37 @@ a {
 }
 
 .tile__value {
+  font-family: var(--font-display);
   font-size: 1.4rem;
-  font-weight: 800;
+  font-weight: 700;
   margin-top: 4px;
+}
+
+.tile--wide .tile__value {
+  color: var(--accent);
 }
 
 .section-title {
   font-size: 0.95rem;
   font-weight: 800;
-  color: var(--navy-dark);
+  color: var(--text);
   margin: 20px 0 10px;
 }
 
 /* ---------- Modal (dialog) ---------- */
 
 .modal {
-  border: none;
+  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 0;
   width: min(92vw, 460px);
   box-shadow: var(--shadow-md);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .modal::backdrop {
-  background: rgba(15, 22, 33, 0.5);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .modal__inner {
@@ -755,9 +854,10 @@ a {
 }
 
 .modal__title {
+  font-family: var(--font-display);
   font-size: 1.05rem;
-  font-weight: 800;
-  color: var(--navy-dark);
+  font-weight: 700;
+  color: var(--text);
   margin-bottom: 16px;
 }
 

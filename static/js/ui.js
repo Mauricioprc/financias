@@ -27,6 +27,18 @@ const UI = (() => {
     return node;
   }
 
+  /* Ícone SVG inline (Lucide). `name` deve existir em ICONS (static/js/icons.js). */
+  function icon(name, attrs = {}) {
+    const markup = (typeof ICONS !== "undefined" && ICONS[name]) || "";
+    const svg = el(
+      "span",
+      { class: ["icon", attrs.class].filter(Boolean).join(" ") },
+      []
+    );
+    svg.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${markup}</svg>`;
+    return svg;
+  }
+
   function money(value) {
     const n = Number(value || 0);
     return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -171,6 +183,7 @@ const UI = (() => {
     qs,
     qsa,
     el,
+    icon,
     money,
     dateBR,
     todayISO,

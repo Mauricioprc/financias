@@ -3,7 +3,7 @@
 function mountCrudView(container, config) {
   const {
     title,
-    icon = "📋",
+    icon = "receipt",
     emptyText = "Nada por aqui ainda.",
     fields,
     editFields,
@@ -47,7 +47,7 @@ function mountCrudView(container, config) {
     if (items.length === 0) {
       container.appendChild(
         UI.el("div", { class: "empty-state" }, [
-          UI.el("div", { class: "empty-state__icon" }, icon),
+          UI.el("div", { class: "empty-state__icon" }, UI.icon(icon)),
           UI.el("div", {}, emptyText),
         ])
       );

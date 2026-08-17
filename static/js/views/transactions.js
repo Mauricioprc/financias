@@ -200,7 +200,7 @@ async function renderTransactionsView(container) {
     if (resp.data.length === 0) {
       listContainer.appendChild(
         UI.el("div", { class: "empty-state" }, [
-          UI.el("div", { class: "empty-state__icon" }, "🧾"),
+          UI.el("div", { class: "empty-state__icon" }, UI.icon("receipt")),
           UI.el("div", {}, "Nenhuma transação encontrada."),
         ])
       );
@@ -254,7 +254,7 @@ async function renderTransactionsView(container) {
       UI.dateBR(t.date),
       accountNameById[String(t.account_id)] || "",
       t.category_id ? categoryNameById[String(t.category_id)] || "" : null,
-      t.credit_card_id ? "💳 no cartão" : null,
+      t.credit_card_id ? "no cartão" : null,
       t.is_paid ? null : "pendente",
     ].filter(Boolean);
 

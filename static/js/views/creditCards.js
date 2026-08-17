@@ -3,7 +3,7 @@
 function renderCreditCardsView(container) {
   mountCrudView(container, {
     title: "Cartões",
-    icon: "💳",
+    icon: "credit-card",
     emptyText: "Cadastre seu primeiro cartão de crédito.",
     fields: [
       { name: "name", label: "Nome", required: true },

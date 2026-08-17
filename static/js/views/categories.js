@@ -3,7 +3,7 @@
 function renderCategoriesView(container) {
   mountCrudView(container, {
     title: "Categorias",
-    icon: "🏷️",
+    icon: "tag",
     emptyText: "Nenhuma categoria cadastrada ainda.",
     fields: [
       { name: "name", label: "Nome", required: true },
