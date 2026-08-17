@@ -84,7 +84,6 @@ const Router = (() => {
 
   function init() {
     window.addEventListener("hashchange", resolve);
-    window.addEventListener("load", resolve);
     resolve();
   }
 

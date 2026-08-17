@@ -13,6 +13,9 @@ async function renderHomeView(container) {
     return;
   }
 
+  let balanceChart = null;
+  let categoryChart = null;
+
   async function refresh() {
     let accounts;
     let txResp;
@@ -29,6 +32,8 @@ async function renderHomeView(container) {
       return;
     }
 
+    if (balanceChart) balanceChart.destroy();
+    if (categoryChart) categoryChart.destroy();
     container.innerHTML = "";
 
     const totalBalance = accounts.reduce((sum, a) => sum + Number(a.current_balance), 0);
@@ -64,6 +69,8 @@ async function renderHomeView(container) {
         ]),
       ])
     );
+
+    await renderCharts(accounts);
 
     container.appendChild(UI.el("div", { class: "section-title" }, "Contas"));
     if (accounts.length === 0) {
@@ -116,6 +123,115 @@ async function renderHomeView(container) {
 
     function openLaunchModal() {
       openCreateTransactionModal(accounts, categories, creditCards, refresh);
+    }
+
+    /* Gráficos de evolução de saldo (30 dias) e gastos por categoria (mês atual).
+       Calculados no client a partir de Api.transactions.list() — ver reportData.js.
+       TODO: mover para endpoint /reports quando existir (Fase C). */
+    async function renderCharts(currentAccounts) {
+      const today = UI.todayISO();
+      const monthStart = today.slice(0, 7) + "-01";
+
+      let last30dTx;
+      let monthTx;
+      try {
+        [last30dTx, monthTx] = await Promise.all([
+          ReportData.fetchAllTransactions({ date_from: ReportData.lastNDays(30)[0] }),
+          ReportData.fetchAllTransactions({ date_from: monthStart, date_to: today, type: "expense" }),
+        ]);
+      } catch (err) {
+        UI.showApiError(err);
+        return;
+      }
+
+      const grid = UI.el("div", { class: "report-grid" });
+
+      const balanceWrap = UI.el("div", { class: "chart-card__canvas-wrap" }, [
+        UI.el("canvas", {}),
+      ]);
+      grid.appendChild(
+        UI.el("div", { class: "card" }, [
+          UI.el("div", { class: "chart-card__title" }, "Evolução do saldo (30 dias)"),
+          balanceWrap,
+        ])
+      );
+
+      const categoryWrap = UI.el("div", { class: "chart-card__canvas-wrap chart-card__canvas-wrap--donut" });
+      grid.appendChild(
+        UI.el("div", { class: "card" }, [
+          UI.el("div", { class: "chart-card__title" }, "Gastos por categoria (mês atual)"),
+          categoryWrap,
+        ])
+      );
+
+      container.appendChild(grid);
+
+      const theme = ChartTheme.applyDefaults();
+
+      const history = ReportData.balanceHistory(currentAccounts, last30dTx, 30);
+      balanceChart = new Chart(UI.qs("canvas", balanceWrap), {
+        type: "line",
+        data: {
+          labels: history.labels,
+          datasets: [
+            {
+              data: history.values,
+              borderColor: theme.accent,
+              backgroundColor: theme.accent + "22",
+              fill: true,
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { ticks: { maxTicksLimit: 6 }, grid: { display: false } },
+            y: { ticks: { callback: (v) => UI.money(v) }, grid: { color: theme.border } },
+          },
+        },
+      });
+
+      const breakdown = ReportData.categoryBreakdown(monthTx, categories, "expense");
+      if (breakdown.labels.length === 0) {
+        categoryWrap.appendChild(
+          UI.el("div", { class: "chart-card__empty" }, "Nenhuma despesa neste mês ainda.")
+        );
+      } else {
+        const canvas = UI.el("canvas", {});
+        categoryWrap.appendChild(canvas);
+        categoryChart = new Chart(canvas, {
+          type: "doughnut",
+          data: {
+            labels: breakdown.labels,
+            datasets: [
+              {
+                data: breakdown.values,
+                backgroundColor: breakdown.labels.map(
+                  (_, i) => theme.categorical[i % theme.categorical.length]
+                ),
+                borderColor: ChartTheme.cssVar("--surface"),
+                borderWidth: 2,
+              },
+            ],
+          },
+          options: {
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: { boxWidth: 10, padding: 12, font: { size: 11 } },
+              },
+              tooltip: {
+                callbacks: { label: (ctx) => `${ctx.label}: ${UI.money(ctx.parsed)}` },
+              },
+            },
+          },
+        });
+      }
     }
   }
 

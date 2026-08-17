@@ -881,6 +881,68 @@ a {
   font-size: 0.9rem;
 }
 
+/* ---------- Gráficos (Home e Relatórios) ---------- */
+
+.chart-card__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 12px;
+}
+
+.chart-card__canvas-wrap {
+  position: relative;
+  height: 200px;
+}
+
+.chart-card__canvas-wrap--donut {
+  height: 220px;
+}
+
+.chart-card__empty {
+  text-align: center;
+  color: var(--gray-500);
+  font-size: 0.85rem;
+  padding: 30px 0;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 900px) {
+  .report-grid {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--gray-100);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.progress-bar__fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.progress-bar__fill--danger {
+  background: var(--danger);
+}
+
+.progress-bar__fill--warning {
+  background: var(--warning);
+}
+
 /* ---------- Responsive: tablet / desktop ---------- */
 
 @media (min-width: 900px) {
