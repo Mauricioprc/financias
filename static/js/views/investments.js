@@ -45,12 +45,22 @@ function renderInvestmentsView(container) {
     updateItem: (id, data) => Api.investments.update(id, data),
     removeItem: (id) => Api.investments.remove(id),
     renderItem: (i) => {
-      const diff = Number(i.current_amount) - Number(i.invested_amount);
+      const invested = Number(i.invested_amount);
+      const diff = Number(i.current_amount) - invested;
+      const pct = invested > 0 ? (diff / invested) * 100 : 0;
+      const isPositive = diff >= 0;
       return {
         title: i.name,
-        subtitle: `${INVESTMENT_TYPE_LABELS[i.type] || i.type}${i.broker ? " · " + i.broker : ""}`,
+        subtitle: [
+          `${INVESTMENT_TYPE_LABELS[i.type] || i.type}${i.broker ? " · " + i.broker : ""} · `,
+          UI.el(
+            "span",
+            { class: `badge ${isPositive ? "badge--income" : "badge--expense"}` },
+            `${isPositive ? "+" : ""}${pct.toFixed(1)}%`
+          ),
+        ],
         value: UI.money(i.current_amount),
-        valueClass: diff >= 0 ? "value--positive" : "value--negative",
+        valueClass: isPositive ? "value--positive" : "value--negative",
       };
     },
   });

@@ -35,6 +35,7 @@ function renderGoalsView(container) {
           GOAL_STATUS_LABELS[g.status]
         }`,
         value: null,
+        progress: g.status === "in_progress" ? { pct } : null,
       };
     },
     extraRowActions: (item, refresh) =>

@@ -1,5 +1,16 @@
 /* Helper genérico para telas de CRUD simples (lista + criar + editar + excluir). */
 
+/* Barra de progresso opcional para um item de lista — info.progress = { pct, className }. */
+function progressBar(progress) {
+  const pct = Math.max(0, Math.min(100, progress.pct));
+  return UI.el("div", { class: "progress-bar" }, [
+    UI.el("div", {
+      class: `progress-bar__fill ${progress.className || ""}`,
+      style: `width:${pct}%`,
+    }),
+  ]);
+}
+
 function mountCrudView(container, config) {
   const {
     title,
@@ -87,17 +98,23 @@ function mountCrudView(container, config) {
         );
       }
 
+      const row = UI.el("div", { class: "list-item__row" }, [
+        UI.el("div", { class: "list-item__main" }, [
+          UI.el("div", { class: "list-item__title" }, info.title),
+          info.subtitle ? UI.el("div", { class: "list-item__subtitle" }, info.subtitle) : null,
+        ]),
+        info.value
+          ? UI.el("div", { class: `list-item__value ${info.valueClass || ""}` }, info.value)
+          : null,
+        actions.childNodes.length ? actions : null,
+      ]);
+
       list.appendChild(
-        UI.el("div", { class: "list-item" }, [
-          UI.el("div", { class: "list-item__main" }, [
-            UI.el("div", { class: "list-item__title" }, info.title),
-            info.subtitle ? UI.el("div", { class: "list-item__subtitle" }, info.subtitle) : null,
-          ]),
-          info.value
-            ? UI.el("div", { class: `list-item__value ${info.valueClass || ""}` }, info.value)
-            : null,
-          actions.childNodes.length ? actions : null,
-        ])
+        UI.el(
+          "div",
+          { class: "list-item" + (info.progress ? " list-item--stacked" : "") },
+          [row, info.progress ? progressBar(info.progress) : null]
+        )
       );
     });
     container.appendChild(list);
