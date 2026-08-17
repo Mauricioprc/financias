@@ -70,7 +70,7 @@ async function renderHomeView(container) {
       ])
     );
 
-    await renderCharts(accounts);
+    await renderCharts();
 
     container.appendChild(UI.el("div", { class: "section-title" }, "Contas"));
     if (accounts.length === 0) {
@@ -125,19 +125,17 @@ async function renderHomeView(container) {
       openCreateTransactionModal(accounts, categories, creditCards, refresh);
     }
 
-    /* Gráficos de evolução de saldo (30 dias) e gastos por categoria (mês atual).
-       Calculados no client a partir de Api.transactions.list() — ver reportData.js.
-       TODO: mover para endpoint /reports quando existir (Fase C). */
-    async function renderCharts(currentAccounts) {
-      const today = UI.todayISO();
-      const monthStart = today.slice(0, 7) + "-01";
+    /* Gráficos de evolução de saldo (30 dias) e gastos por categoria (mês atual),
+       via app/api/v1/report_routes.py (ver reportData.js). */
+    async function renderCharts() {
+      const currentMonth = UI.todayISO().slice(0, 7);
 
-      let last30dTx;
-      let monthTx;
+      let history;
+      let breakdown;
       try {
-        [last30dTx, monthTx] = await Promise.all([
-          ReportData.fetchAllTransactions({ date_from: ReportData.lastNDays(30)[0] }),
-          ReportData.fetchAllTransactions({ date_from: monthStart, date_to: today, type: "expense" }),
+        [history, breakdown] = await Promise.all([
+          ReportData.balanceHistory(30),
+          ReportData.categoryBreakdown(currentMonth, "expense"),
         ]);
       } catch (err) {
         UI.showApiError(err);
@@ -168,7 +166,6 @@ async function renderHomeView(container) {
 
       const theme = ChartTheme.applyDefaults();
 
-      const history = ReportData.balanceHistory(currentAccounts, last30dTx, 30);
       balanceChart = new Chart(UI.qs("canvas", balanceWrap), {
         type: "line",
         data: {
@@ -195,7 +192,6 @@ async function renderHomeView(container) {
         },
       });
 
-      const breakdown = ReportData.categoryBreakdown(monthTx, categories, "expense");
       if (breakdown.labels.length === 0) {
         categoryWrap.appendChild(
           UI.el("div", { class: "chart-card__empty" }, "Nenhuma despesa neste mês ainda.")

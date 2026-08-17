@@ -1,19 +1,16 @@
 /* Relatórios — receitas x despesas por mês, breakdown por categoria, fatura de
-   cartão mês a mês e progresso de metas. Agregações client-side (reportData.js);
-   TODO: mover para endpoint /reports quando existir (Fase C). */
+   cartão mês a mês e progresso de metas. Receitas/despesas e breakdown vêm de
+   app/api/v1/report_routes.py; faturas por cartão usa Api.invoices (totais já
+   fechados pelo app) e metas usa Api.goals — nenhum dos dois precisa de
+   agregação extra. */
 
 async function renderReportsView(container) {
   container.appendChild(UI.el("div", { class: "loading" }, "Carregando..."));
 
-  let categories;
   let creditCards;
   let goals;
   try {
-    [categories, creditCards, goals] = await Promise.all([
-      Api.categories.list(),
-      Api.creditCards.list(),
-      Api.goals.list(),
-    ]);
+    [creditCards, goals] = await Promise.all([Api.creditCards.list(), Api.goals.list()]);
   } catch (err) {
     container.innerHTML = "";
     UI.showApiError(err);
@@ -66,7 +63,7 @@ async function renderReportsView(container) {
   const invoicesCardBody = UI.el("div", { class: "chart-card__canvas-wrap" });
   container.appendChild(
     UI.el("div", { class: "card" }, [
-      UI.el("div", { class: "chart-card__title" }, "Faturas por cartão (últimos meses)"),
+      UI.el("div", { class: "chart-card__title" }, "Faturas por cartão (últimos 6 meses)"),
       invoicesCardBody,
     ])
   );
@@ -77,15 +74,14 @@ async function renderReportsView(container) {
 
   const theme = ChartTheme.applyDefaults();
 
-  let allTx;
+  let summary;
   try {
-    allTx = await ReportData.fetchAllTransactions({ date_from: ReportData.lastNMonths(12)[0] + "-01" });
+    summary = await ReportData.incomeVsExpenseByMonth(12);
   } catch (err) {
     UI.showApiError(err);
     return;
   }
 
-  const summary = ReportData.incomeVsExpenseByMonth(allTx, 12);
   const ieCanvas = UI.el("canvas", {});
   incomeExpenseWrap.appendChild(ieCanvas);
   incomeExpenseChart = new Chart(ieCanvas, {
@@ -107,11 +103,16 @@ async function renderReportsView(container) {
     },
   });
 
-  function renderBreakdown() {
+  async function renderBreakdown() {
     if (breakdownChart) breakdownChart.destroy();
     breakdownWrap.innerHTML = "";
-    const monthTx = allTx.filter((t) => String(t.date).slice(0, 7) === state.month && t.type === "expense");
-    const breakdown = ReportData.categoryBreakdown(monthTx, categories, "expense");
+    let breakdown;
+    try {
+      breakdown = await ReportData.categoryBreakdown(state.month, "expense");
+    } catch (err) {
+      UI.showApiError(err);
+      return;
+    }
     if (breakdown.labels.length === 0) {
       breakdownWrap.appendChild(
         UI.el("div", { class: "chart-card__empty" }, "Nenhuma despesa neste mês.")
@@ -142,9 +143,10 @@ async function renderReportsView(container) {
       },
     });
   }
-  renderBreakdown();
+  await renderBreakdown();
 
-  /* Comparativo de fatura por cartão — soma das transações no cartão, por mês, últimos 6 meses. */
+  /* Comparativo de fatura por cartão — total_amount de cada fatura já fechada
+     pelo app (Api.invoices), agrupado por mês de referência. */
   invoicesCardBody.innerHTML = "";
   if (creditCards.length === 0) {
     invoicesCardBody.appendChild(
@@ -152,22 +154,23 @@ async function renderReportsView(container) {
     );
   } else {
     const months6 = ReportData.lastNMonths(6);
-    const byCard = creditCards.map((card) => {
-      const totals = months6.map((m) =>
-        allTx
-          .filter(
-            (t) =>
-              t.credit_card_id === card.id &&
-              t.type === "expense" &&
-              String(t.date).slice(0, 7) === m
-          )
-          .reduce((sum, t) => sum + Number(t.amount), 0)
-      );
-      return { label: card.name, data: totals };
+    let invoicesByCard;
+    try {
+      invoicesByCard = await Promise.all(creditCards.map((c) => Api.invoices.list({ credit_card_id: c.id })));
+    } catch (err) {
+      UI.showApiError(err);
+      return;
+    }
+    const byCard = creditCards.map((card, i) => {
+      const totalByMonth = {};
+      invoicesByCard[i].forEach((inv) => {
+        totalByMonth[String(inv.reference_month).slice(0, 7)] = Number(inv.total_amount);
+      });
+      return { label: card.name, data: months6.map((m) => totalByMonth[m] || 0) };
     });
     const invCanvas = UI.el("canvas", {});
     invoicesCardBody.appendChild(invCanvas);
-    const invoicesChart = new Chart(invCanvas, {
+    new Chart(invCanvas, {
       type: "bar",
       data: {
         labels: months6.map(ReportData.monthLabel),

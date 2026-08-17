@@ -211,5 +211,13 @@ const Api = (() => {
       update: (id, data) => patch(`/investments/${id}`, data).then((r) => r.data),
       remove: (id) => del(`/investments/${id}`),
     },
+
+    reports: {
+      balanceHistory: (days) => get("/reports/balance-history", { days }).then((r) => r.data),
+      categoryBreakdown: (month, type) =>
+        get("/reports/category-breakdown", { month, type }).then((r) => r.data),
+      incomeVsExpense: (months) =>
+        get("/reports/income-vs-expense", { months }).then((r) => r.data),
+    },
   };
 })();

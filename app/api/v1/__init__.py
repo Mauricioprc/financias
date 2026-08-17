@@ -10,6 +10,7 @@ def register_v1_blueprints(app: Flask) -> None:
     from app.api.v1.investment_routes import bp as investment_bp
     from app.api.v1.invoice_routes import bp as invoice_bp
     from app.api.v1.recurring_transaction_routes import bp as recurring_transaction_bp
+    from app.api.v1.report_routes import bp as report_bp
     from app.api.v1.transaction_routes import bp as transaction_bp
     from app.api.v1.transfer_routes import bp as transfer_bp
 
@@ -23,5 +24,6 @@ def register_v1_blueprints(app: Flask) -> None:
     app.register_blueprint(
         recurring_transaction_bp, url_prefix="/api/v1/recurring-transactions"
     )
+    app.register_blueprint(report_bp, url_prefix="/api/v1/reports")
     app.register_blueprint(transaction_bp, url_prefix="/api/v1/transactions")
     app.register_blueprint(transfer_bp, url_prefix="/api/v1/transfers")
