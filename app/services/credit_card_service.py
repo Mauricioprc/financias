@@ -23,11 +23,17 @@ def get_credit_card(user_id: int, credit_card_id: int) -> CreditCard:
 
 
 def create_credit_card(
-    user_id: int, name: str, credit_limit: Decimal, closing_day: int, due_day: int
+    user_id: int,
+    name: str,
+    credit_limit: Decimal,
+    closing_day: int,
+    due_day: int,
+    bank_name: str | None = None,
 ) -> CreditCard:
     card = CreditCard(
         user_id=user_id,
         name=name,
+        bank_name=bank_name,
         credit_limit=credit_limit,
         closing_day=closing_day,
         due_day=due_day,

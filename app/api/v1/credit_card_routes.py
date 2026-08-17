@@ -29,6 +29,7 @@ def create_credit_card_route(payload, user_id):
     card = credit_card_service.create_credit_card(
         user_id=user_id,
         name=payload["name"],
+        bank_name=payload["bank_name"],
         credit_limit=payload["credit_limit"],
         closing_day=payload["closing_day"],
         due_day=payload["due_day"],
