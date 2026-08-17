@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: financias
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ACCESS_TOKEN_EXPIRES_MINUTES
+        value: "30"
+      - key: JWT_REFRESH_TOKEN_EXPIRES_DAYS
+        value: "30"
