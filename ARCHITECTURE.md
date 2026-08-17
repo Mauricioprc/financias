@@ -2,9 +2,10 @@
 
 Sistema de gestão financeira pessoal — Fase 0 (fundação).
 
-Stack: Flask + PostgreSQL (Neon) + SQLAlchemy + Alembic. Backend hospedado no
-Render (free tier). Duas interfaces futuras (dashboard web, chatbot WhatsApp via
-Meta Cloud API) consumindo a mesma API e o mesmo banco.
+Stack: Flask + SQLite + SQLAlchemy + Alembic. Backend hospedado no
+PythonAnywhere (free tier) — ver seção 5.1 para o racional da escolha de banco.
+Duas interfaces futuras (dashboard web, chatbot WhatsApp via Meta Cloud API)
+consumindo a mesma API e o mesmo banco.
 
 Este documento cobre apenas planejamento. Nenhum código de implementação é
 criado nesta fase. Fase 1 (autenticação + CRUD de receitas/despesas) só começa
@@ -25,7 +26,7 @@ financias/
 ├── .gitignore
 ├── requirements.txt
 ├── pyproject.toml              # config de lint/format/type-check
-├── wsgi.py                     # entrypoint do Render (gunicorn wsgi:app)
+├── wsgi.py                     # entrypoint WSGI (usado pelo arquivo de config do PythonAnywhere)
 │
 ├── app/                        # pacote principal do backend Flask
 │   ├── __init__.py             # application factory (create_app)
@@ -368,13 +369,12 @@ garantido só pelo schema, é regra de negócio.
 
 Decisão: **JWT stateless**, não sessão de servidor.
 
-Motivo: o Render free tier pode reiniciar/hibernar a instância (cold start),
-o que tornaria sessões em memória inúteis sem um store externo (Redis, etc.)
-— e isso seria complexidade extra desnecessária agora. JWT é stateless. Além
-disso, a mesma API vai atender o bot no futuro, que não tem conceito de
-"sessão de navegador" — um esquema de autenticação baseado em token
-(Authorization header) serve os dois casos de forma mais uniforme do que
-cookie de sessão.
+Motivo: sessão em memória de servidor exigiria um store externo (Redis etc.)
+para sobreviver a restart do processo — complexidade extra desnecessária
+agora. JWT é stateless. Além disso, a mesma API vai atender o bot no futuro,
+que não tem conceito de "sessão de navegador" — um esquema de autenticação
+baseado em token (Authorization header) serve os dois casos de forma mais
+uniforme do que cookie de sessão.
 
 Fluxo:
 1. `POST /api/v1/auth/login` com email + senha → valida contra `password_hash`
@@ -485,22 +485,34 @@ programaticamente sem parsear texto.
 
 ## 5. Setup
 
-### 5.1 Neon (PostgreSQL free tier)
+### 5.1 Banco de dados: SQLite local
 
-1. Criar conta em neon.tech, criar um novo **Project** (ex. `financias-prod`).
-2. Neon já cria um branch `main` e um database padrão — pode renomear o
-   database para algo como `financias`.
-3. Na aba **Connection Details**, copiar a *connection string* no formato
-   pooled (`-pooler` no host) — importante usar a versão *pooled* porque o
-   Render free tier + Flask com múltiplos workers se beneficia do PgBouncer
-   do Neon em vez de abrir conexões diretas demais.
-4. Guardar a string em `DATABASE_URL`. Formato:
-   ```
-   postgresql://<user>:<password>@<host>-pooler.<region>.aws.neon.tech/<db>?sslmode=require
-   ```
-5. Criar também um **branch de desenvolvimento** no Neon (ex. `dev`) — dá um
-   banco isolado gratuito para testar migrations sem afetar dados reais.
-   Nesse caso, `DATABASE_URL` local aponta para o branch `dev`.
+Decisão revista após a Fase 0 (era Neon/Postgres inicialmente — ver histórico
+do Git para o racional anterior). O app roda em SQLite, um arquivo local em
+`instance/financias.db` (pasta já no `.gitignore`), pelos seguintes motivos:
+
+- Viabiliza hospedagem no **free tier do PythonAnywhere**, que restringe
+  saída de rede a uma allowlist de domínios — bancos externos como Neon não
+  estão nela, então uma conexão de rede pra Postgres gerenciado simplesmente
+  não abre nesse plano. SQLite é um arquivo, não abre conexão de rede
+  nenhuma, então não esbarra nessa restrição.
+- Escala do projeto (uso pessoal/familiar) não justifica um Postgres
+  gerenciado — SQLite aguenta tranquilamente esse volume de dados/escrita.
+- `SQLALCHEMY_DATABASE_URI` já é lido de `DATABASE_URL` via variável de
+  ambiente (`app/config.py`), então trocar de engine é só trocar o valor da
+  URL — nenhum código muda. Todas as migrations em `migrations/versions/`
+  usam `batch_alter_table`, que é compatível com SQLite (Postgres também).
+
+Formato da URL (caminho **absoluto** — SQLite exige isso):
+```
+sqlite:////caminho/absoluto/para/instance/financias.db
+```
+(repare nas 4 barras: três do esquema `sqlite://` + a barra inicial do
+caminho absoluto)
+
+Se no futuro o volume de dados ou a necessidade de acesso concorrente
+justificar voltar a um banco gerenciado, a troca é só de novo mudar
+`DATABASE_URL` — nenhuma migration ou service precisa ser reescrito.
 
 ### 5.2 Variáveis de ambiente
 
@@ -508,7 +520,7 @@ programaticamente sem parsear texto.
 
 ```
 # Banco
-DATABASE_URL=postgresql://user:password@host-pooler.region.aws.neon.tech/dbname?sslmode=require
+DATABASE_URL=sqlite:///instance/financias.db
 
 # Flask
 FLASK_ENV=development
@@ -525,23 +537,44 @@ WHATSAPP_VERIFY_TOKEN=
 WHATSAPP_ACCESS_TOKEN=
 ```
 
-### 5.3 Deploy no Render (free tier)
+### 5.3 Deploy no PythonAnywhere (free tier)
 
-1. Criar **Web Service** novo no Render, apontando para o repositório Git.
-2. Runtime: Python 3.11+.
-3. Build command: `pip install -r requirements.txt`.
-4. Start command: `gunicorn wsgi:app` (ou `gunicorn "app:create_app()"` —
-   ajustar conforme o entrypoint definido em `wsgi.py`).
-5. Em **Environment**, cadastrar as mesmas variáveis do `.env.example` acima,
-   com `DATABASE_URL` apontando para o branch `main` do Neon (produção).
-6. Migrations: rodar `flask db upgrade` manualmente via *Render Shell* (ou
-   como parte do build/deploy hook) após cada deploy que inclua migration
-   nova — no free tier não há job/worker separado, então isso é feito no
-   próprio deploy.
-7. Observação sobre free tier do Render: a instância "dorme" após período de
-   inatividade e tem cold start de alguns segundos no primeiro request —
-   aceitável para uso pessoal na Fase 0, mas vale documentar para não causar
-   susto se o dashboard demorar para responder após ociosidade.
+1. Criar conta em pythonanywhere.com (plano **Beginner/free**).
+2. Fazer upload do repositório — via `git clone` no **Bash console** deles
+   (têm git instalado) apontando pro repo no GitHub.
+3. Criar um virtualenv e instalar `requirements.txt` (`mkvirtualenv` ou
+   `python -m venv`, conforme preferência).
+4. Na aba **Web**, criar uma nova web app, framework "Manual configuration"
+   (não usar o wizard de Flask deles, já temos `wsgi.py` pronto), Python
+   3.11+.
+5. Editar o arquivo de configuração WSGI que o PythonAnywhere gera, apontando
+   pro nosso `create_app()`:
+   ```python
+   import sys
+   path = "/home/<usuario>/financias"
+   if path not in sys.path:
+       sys.path.insert(0, path)
+
+   from app import create_app
+   application = create_app("production")
+   ```
+6. Configurar `DATABASE_URL` e as demais variáveis de `.env.example` — o
+   PythonAnywhere não lê `.env` automaticamente fora do Bash console, então
+   ou se define via `os.environ` no próprio arquivo WSGI acima (antes do
+   `create_app()`), ou se garante que `python-dotenv` carrega o `.env` que
+   foi enviado junto (mais simples: exportar direto no WSGI file mesmo,
+   já que ele não é servido publicamente).
+7. Apontar o **Static files mapping** da aba Web pra pasta `static/` do
+   projeto (opcional — Flask já serve os estáticos, mas o PythonAnywhere
+   serve mais rápido direto por fora do WSGI).
+8. Migrations: `flask --app wsgi:app db upgrade` no Bash console, sempre que
+   uma migration nova entrar.
+9. Sem cold start nesse plano (diferente do Render free tier) — a única
+   limitação real do free tier é a allowlist de saída de rede (não afeta o
+   dashboard, que só fala com o próprio banco local; passa a importar quando
+   o bot do WhatsApp existir — `graph.facebook.com` já está na allowlist
+   deles, então a Fase 4 deve funcionar sem upgrade de plano, mas vale
+   confirmar no momento).
 
 ---
 
@@ -558,39 +591,26 @@ WHATSAPP_ACCESS_TOKEN=
 
 ## Riscos conhecidos
 
-### Render free tier + webhook do WhatsApp (Meta Cloud API)
+### Allowlist de rede do PythonAnywhere free tier + webhook do WhatsApp (Meta Cloud API)
 
-O Render free tier hiberna a instância após um período de inatividade e leva
-alguns segundos para "acordar" no request seguinte (cold start — já citado na
-seção 5.3). Isso é tolerável para o dashboard web (usuário só espera um pouco
-mais), mas é um problema potencialmente mais sério para o webhook do
-WhatsApp, que só será implementado na **Fase 4**:
+Diferente do Render, o PythonAnywhere free tier não hiberna a instância — não
+há cold start a se preocupar para o dashboard nem para o webhook. O risco
+real desse plano é outro: **saída de rede é restrita a uma allowlist de
+domínios**. Bancos externos como Neon não estavam nela (motivo da migração
+para SQLite, seção 5.1); `graph.facebook.com` (usado pela Meta Cloud API do
+WhatsApp) **está** na allowlist, então o bot (Fase 4) deve funcionar sem
+upgrade de plano — mas vale confirmar isso na prática antes de depender
+disso, já que a lista pode mudar.
 
-- A Meta Cloud API espera que o endpoint de webhook responda rapidamente
-  (dentro de poucos segundos). Se a instância estiver hibernada, o cold start
-  pode causar **timeout** na entrega do webhook.
-- Quando isso acontece, a Meta **reentrega a mesma mensagem** (retry
-  automático) — o que pode gerar processamento duplicado de uma mensagem do
-  usuário (ex.: lançar a mesma transação duas vezes) se o handler do webhook
-  não for idempotente.
+Mesmo sem risco de cold start, **idempotência no handler do webhook continua
+sendo boa prática** — a Meta pode reentregar uma mensagem por outros motivos
+(timeout de rede pontual, erro 5xx transitório), e sem deduplicar pelo
+`message_id` isso geraria processamento duplicado (ex.: lançar a mesma
+transação duas vezes). Fica mantido como parte do design da Fase 4.
 
-Esta arquitetura (Fase 0) não resolve esse problema agora — é uma decisão
-adiada intencionalmente para a Fase 4, quando o bot for implementado. As
-opções a avaliar nessa fase são, no mínimo:
-
-1. **Upgrade do plano do Render** (sai do free tier, elimina a hibernação) —
-   solução mais simples, tem custo mensal.
-2. **Keep-alive** (ping periódico externo à própria instância, ex. via cron
-   job gratuito) para evitar que ela hiberne — sem custo adicional, mas é uma
-   solução frágil (ainda pode falhar em cold starts pontuais, e depende de um
-   serviço de terceiros manter o ping funcionando).
-3. Independentemente da opção acima, o handler do webhook deveria ser
-   **idempotente** (ex. deduplicar pelo `message_id` que a Meta envia), como
-   mitigação complementar ao problema de reentrega — isso é uma boa prática
-   independente da causa raiz escolhida.
-
-Nenhuma dessas opções está implementada nesta fase; esta seção existe apenas
-para não perder essa decisão de vista até a Fase 4.
+Se no futuro a allowlist bloquear algo necessário, as opções são: upgrade
+para o plano pago do PythonAnywhere (remove a restrição de rede) ou migrar a
+hospedagem — nenhuma decisão precisa ser tomada agora.
 
 ---
 
