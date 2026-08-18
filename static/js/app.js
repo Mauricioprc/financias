@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { path: "/recurring", icon: "refresh-cw", label: "Recorrências" },
   { path: "/goals", icon: "target", label: "Metas" },
   { path: "/investments", icon: "trending-up", label: "Investimentos" },
+  { path: "/profile", icon: "user", label: "Perfil" },
 ];
 
 function isRoutePrefixOf(currentPath, itemPath) {

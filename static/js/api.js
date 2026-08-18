@@ -140,6 +140,10 @@ const Api = (() => {
 
     me: () => get("/auth/me").then((r) => r.data),
 
+    users: {
+      updateProfile: (data) => patch("/users/me", data).then((r) => r.data),
+    },
+
     accounts: {
       list: () => get("/accounts").then((r) => r.data),
       get: (id) => get(`/accounts/${id}`).then((r) => r.data),

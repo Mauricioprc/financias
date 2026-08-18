@@ -14,6 +14,13 @@ class Config:
         days=int(os.environ.get("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "30"))
     )
 
+    # Bot WhatsApp (Fase D)
+    BOT_SERVICE_API_KEY = os.environ.get("BOT_SERVICE_API_KEY", "")
+    WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+    WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+    WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+    WHATSAPP_APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET", "")
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

@@ -1,4 +1,6 @@
 from app.models.account import Account
+from app.models.bot_conversation_state import BotConversationState
+from app.models.bot_processed_message import BotProcessedMessage
 from app.models.category import Category
 from app.models.credit_card import CreditCard
 from app.models.goal import Goal
@@ -12,6 +14,8 @@ from app.models.user import User
 __all__ = [
     "User",
     "Account",
+    "BotConversationState",
+    "BotProcessedMessage",
     "Category",
     "CreditCard",
     "Goal",

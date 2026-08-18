@@ -1,0 +1,35 @@
+"""Modelo do arquivo de configuração WSGI do PythonAnywhere.
+
+Copie o conteúdo abaixo (com os valores reais, não estes placeholders) para
+o arquivo que o PythonAnywhere gera em: aba Web -> Code -> link do WSGI
+configuration file (algo como /var/www/<usuario>_pythonanywhere_com_wsgi.py).
+
+Troque <seu_usuario> pelo seu usuário do PythonAnywhere e preencha os
+valores reais de SECRET_KEY/JWT_SECRET_KEY (gere novos, não reuse os do
+.env local) e das credenciais do WhatsApp quando chegar na Fase D2.
+"""
+
+import os
+import sys
+
+path = "/home/<seu_usuario>/financias"
+if path not in sys.path:
+    sys.path.insert(0, path)
+
+os.environ["FLASK_ENV"] = "production"
+os.environ["DATABASE_URL"] = "sqlite:////home/<seu_usuario>/financias/instance/financias.db"
+os.environ["SECRET_KEY"] = "<gerar-uma-chave-aleatoria-longa>"
+os.environ["JWT_SECRET_KEY"] = "<gerar-outra-chave-aleatoria-longa>"
+os.environ["JWT_ACCESS_TOKEN_EXPIRES_MINUTES"] = "30"
+os.environ["JWT_REFRESH_TOKEN_EXPIRES_DAYS"] = "30"
+
+# Bot do WhatsApp (Fase D)
+os.environ["BOT_SERVICE_API_KEY"] = ""
+os.environ["WHATSAPP_VERIFY_TOKEN"] = ""
+os.environ["WHATSAPP_ACCESS_TOKEN"] = ""
+os.environ["WHATSAPP_PHONE_NUMBER_ID"] = ""
+os.environ["WHATSAPP_APP_SECRET"] = ""
+
+from app import create_app
+
+application = create_app("production")
