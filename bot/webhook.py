@@ -36,4 +36,6 @@ def receive_webhook():
     usuário, máquina de estados, chamada aos services) chega na Fase D2."""
     # TODO (Fase D2): validar assinatura X-Hub-Signature-256 com
     # WHATSAPP_APP_SECRET antes de processar qualquer coisa do payload.
+    # TODO (temporário, diagnóstico): remover depois de confirmar entrega.
+    current_app.logger.warning("bot webhook payload: %s", request.get_json(silent=True))
     return "", 200
