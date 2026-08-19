@@ -1,14 +1,21 @@
 """Rotas do webhook do WhatsApp (Meta Cloud API).
 
-Fase D1: só a verificação GET está implementada de verdade — é o suficiente
-para configurar o webhook no painel da Meta e confirmar que ele está
-acessível. O POST responde 200 imediatamente (Meta espera resposta rápida —
-ver ARCHITECTURE.md "Riscos conhecidos") mas ainda não processa nada; isso
-entra na Fase D2 junto com a validação de assinatura (X-Hub-Signature-256,
-usando WHATSAPP_APP_SECRET) e a resolução do usuário pelo telefone.
+GET: verificação única feita pela Meta ao configurar o webhook no painel.
+POST: recebe eventos de mensagem/status. Valida a assinatura, ignora eventos
+de status (delivered/read/failed — não são mensagem recebida), processa
+mensagens de forma síncrona (sem fila/worker nesta stack) e sempre responde
+200 no final — mesmo em erro, pra Meta não ficar reentregando em loop; o
+erro fica logado pra investigação.
 """
 
+import logging
+
 from flask import Blueprint, current_app, request
+
+from bot import auth, conversation
+from bot import handlers  # noqa: F401  (garante que os fluxos se registrem)
+
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("bot_webhook", __name__)
 
@@ -31,11 +38,15 @@ def verify_webhook():
 
 @bp.route("/webhook", methods=["POST"])
 def receive_webhook():
-    """Recebe eventos de mensagem da Meta. Responde 200 de imediato — a
-    lógica de negócio (idempotência via BotProcessedMessage, resolução de
-    usuário, máquina de estados, chamada aos services) chega na Fase D2."""
-    # TODO (Fase D2): validar assinatura X-Hub-Signature-256 com
-    # WHATSAPP_APP_SECRET antes de processar qualquer coisa do payload.
-    # TODO (temporário, diagnóstico): remover depois de confirmar entrega.
-    current_app.logger.warning("bot webhook payload: %s", request.get_json(silent=True))
+    signature = request.headers.get("X-Hub-Signature-256")
+    if not auth.verify_signature(request.get_data(), signature):
+        logger.warning("Webhook do bot recebeu payload com assinatura inválida.")
+        return "", 403
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        conversation.handle_incoming_payload(payload)
+    except Exception:
+        logger.exception("Erro processando payload do webhook do bot.")
+
     return "", 200

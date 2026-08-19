@@ -5,3 +5,4 @@ Flask-JWT-Extended==4.6.0
 marshmallow==3.21.3
 python-dotenv==1.0.1
 gunicorn==22.0.0
+requests==2.32.3
