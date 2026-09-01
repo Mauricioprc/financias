@@ -204,6 +204,11 @@ def _handle_root_selection(user, event: dict) -> None:
         return
 
     step, context = module.start(user)
+    if step is None:
+        # O fluxo já terminou na própria mensagem inicial (ex.: pré-condição
+        # não atendida, como "precisa de 2 contas pra transferir") — não há
+        # passo seguinte, então não deve sobrar estado de conversa nenhum.
+        return
     set_state(user.id, flow, step, context)
 
 

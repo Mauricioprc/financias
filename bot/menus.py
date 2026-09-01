@@ -2,9 +2,10 @@
 
 Cada item do menu raiz tem um `id` (usado como id da linha na lista
 interativa do WhatsApp e como texto alternativo pra quem digitar o número),
-um rótulo, e o nome do fluxo que ele dispara em bot/handlers/. Os fluxos que
-ainda não têm handler (Fase D3) ficam registrados aqui mas respondem com uma
-mensagem de "em breve" — assim a lista já existe inteira desde já.
+um rótulo, e o nome do fluxo que ele dispara em bot/handlers/. Um fluxo sem
+handler registrado (bot/handlers/__init__.py) responde com uma mensagem de
+"em breve" automaticamente — assim a lista já existe inteira desde já, mesmo
+antes de todo item ter handler.
 """
 
 ROOT_MENU_ITEMS = [
@@ -20,7 +21,15 @@ ROOT_MENU_ITEMS = [
 ]
 
 # Fluxos sem passo-a-passo — respondem na hora e não usam BotConversationState.
-DIRECT_FLOWS = {"balance", "monthly_summary"}
+DIRECT_FLOWS = {
+    "balance",
+    "monthly_summary",
+    "accounts",
+    "goals",
+    "investments",
+    "credit_cards",
+    "recurring",
+}
 
 # Palavras-chave que abortam qualquer fluxo em qualquer ponto e voltam ao menu raiz.
 EXIT_KEYWORDS = {"menu", "cancelar", "sair"}
