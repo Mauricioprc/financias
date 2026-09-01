@@ -28,6 +28,9 @@ class RecurringTransaction(db.Model, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"), nullable=False)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
+    credit_card_id: Mapped[int | None] = mapped_column(
+        ForeignKey("credit_cards.id"), nullable=True, index=True
+    )
     description: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[str] = mapped_column(String(10), nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)

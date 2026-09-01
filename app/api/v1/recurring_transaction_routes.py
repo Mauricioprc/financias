@@ -34,6 +34,7 @@ def create_recurring_transaction_route(payload, user_id):
         user_id=user_id,
         account_id=payload["account_id"],
         category_id=payload["category_id"],
+        credit_card_id=payload["credit_card_id"],
         description=payload["description"],
         type=payload["type"],
         amount=payload["amount"],

@@ -6,8 +6,13 @@ async function renderRecurringView(container) {
   container.appendChild(UI.el("div", { class: "loading" }, "Carregando..."));
   let accounts;
   let categories;
+  let creditCards;
   try {
-    [accounts, categories] = await Promise.all([Api.accounts.list(), Api.categories.list()]);
+    [accounts, categories, creditCards] = await Promise.all([
+      Api.accounts.list(),
+      Api.categories.list(),
+      Api.creditCards.list(),
+    ]);
   } catch (err) {
     container.innerHTML = "";
     UI.showApiError(err);
@@ -19,6 +24,10 @@ async function renderRecurringView(container) {
   const categoryOptions = [{ value: "", label: "(sem categoria)" }].concat(
     categories.map((c) => ({ value: c.id, label: c.name }))
   );
+  const creditCardOptions = [{ value: "", label: "(débito automático na conta)" }].concat(
+    creditCards.map((c) => ({ value: c.id, label: c.name }))
+  );
+  const creditCardNameById = Object.fromEntries(creditCards.map((c) => [String(c.id), c.name]));
 
   mountCrudView(container, {
     title: "Recorrências",
@@ -27,7 +36,6 @@ async function renderRecurringView(container) {
     fields: [
       { name: "account_id", label: "Conta", type: "select", required: true, options: accountOptions },
       { name: "category_id", label: "Categoria", type: "select", options: categoryOptions },
-      { name: "description", label: "Descrição", required: true },
       {
         name: "type",
         label: "Tipo",
@@ -38,6 +46,8 @@ async function renderRecurringView(container) {
           { value: "expense", label: "Despesa" },
         ],
       },
+      { name: "credit_card_id", label: "Assinatura no cartão (opcional)", type: "select", options: creditCardOptions },
+      { name: "description", label: "Descrição", required: true },
       { name: "amount", label: "Valor (R$)", type: "number", step: "0.01", required: true },
       {
         name: "frequency",
@@ -74,8 +84,8 @@ async function renderRecurringView(container) {
     renderItem: (r) => ({
       title: r.description + (r.is_active ? "" : " (inativa)"),
       subtitle: `${RECURRING_FREQUENCY_LABELS[r.frequency]} · desde ${UI.dateBR(r.start_date)}${
-        r.last_generated ? ` · última geração ${UI.dateBR(r.last_generated)}` : ""
-      }`,
+        r.credit_card_id ? ` · cartão: ${creditCardNameById[String(r.credit_card_id)] || ""}` : ""
+      }${r.last_generated ? ` · última geração ${UI.dateBR(r.last_generated)}` : ""}`,
       value: (r.type === "income" ? "+ " : "- ") + UI.money(r.amount),
       valueClass: r.type === "income" ? "value--positive" : "value--negative",
     }),
@@ -93,6 +103,7 @@ async function renderRecurringView(container) {
       ...v,
       account_id: Number(v.account_id),
       category_id: v.category_id ? Number(v.category_id) : null,
+      credit_card_id: v.type === "expense" && v.credit_card_id ? Number(v.credit_card_id) : null,
     }),
   });
 

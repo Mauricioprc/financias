@@ -228,6 +228,142 @@ def test_delete_recurring_with_generated_transactions_is_conflict(client, auth_h
     assert resp.get_json()["error"]["code"] == "CONFLICT"
 
 
+def _create_card(client, headers, closing_day=10, due_day=20):
+    resp = client.post(
+        "/api/v1/credit-cards",
+        json={
+            "name": "Nubank",
+            "credit_limit": 5000.0,
+            "closing_day": closing_day,
+            "due_day": due_day,
+        },
+        headers=headers,
+    )
+    return resp.get_json()["data"]["id"]
+
+
+def test_create_subscription_requires_expense_type(client, auth_headers):
+    headers = auth_headers()
+    account_id = _create_account(client, headers)
+    card_id = _create_card(client, headers)
+
+    resp = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Netflix",
+            "type": "income",
+            "amount": 39.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-01-05",
+        },
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_generate_subscription_charges_invoice_instead_of_account(client, auth_headers):
+    headers = auth_headers()
+    account_id = _create_account(client, headers, initial_balance=100.0)
+    card_id = _create_card(client, headers, closing_day=10, due_day=20)
+
+    resp = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Netflix",
+            "type": "expense",
+            "amount": 39.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",
+        },
+        headers=headers,
+    )
+    recurring_id = resp.get_json()["data"]["id"]
+
+    resp = client.post(
+        f"/api/v1/recurring-transactions/{recurring_id}/generate?until=2026-09-30",
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    transactions = resp.get_json()["data"]
+    assert len(transactions) == 3
+    for t in transactions:
+        assert t["credit_card_id"] == card_id
+        assert t["invoice_id"] is not None
+
+    # Saldo da conta não muda — cobrança foi pra fatura, não pra conta.
+    account = client.get(f"/api/v1/accounts/{account_id}", headers=headers).get_json()["data"]
+    assert account["current_balance"] == "100.00"
+
+    invoices = client.get(
+        f"/api/v1/invoices?credit_card_id={card_id}", headers=headers
+    ).get_json()["data"]
+    reference_months = sorted(inv["reference_month"] for inv in invoices)
+    assert reference_months == ["2026-07-01", "2026-08-01", "2026-09-01"]
+    for inv in invoices:
+        assert inv["total_amount"] == "39.90"
+
+
+def test_cannot_generate_subscription_into_a_closed_future_invoice(client, auth_headers):
+    headers = auth_headers()
+    account_id = _create_account(client, headers, initial_balance=100.0)
+    card_id = _create_card(client, headers, closing_day=10, due_day=20)
+
+    # Cria e fecha antecipadamente a fatura de agosto.
+    august_purchase = client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "type": "expense",
+            "description": "Compra avulsa",
+            "amount": 10.0,
+            "date": "2026-08-05",
+        },
+        headers=headers,
+    ).get_json()["data"]
+    client.post(f"/api/v1/invoices/{august_purchase['invoice_id']}/close", headers=headers)
+
+    resp = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Netflix",
+            "type": "expense",
+            "amount": 39.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",
+        },
+        headers=headers,
+    )
+    recurring_id = resp.get_json()["data"]["id"]
+
+    resp = client.post(
+        f"/api/v1/recurring-transactions/{recurring_id}/generate?until=2026-09-30",
+        headers=headers,
+    )
+    assert resp.status_code == 409
+
+    # Nada foi gerado — nem a ocorrência de julho, que teria sido processada
+    # com sucesso antes de travar na de agosto (fatura fechada).
+    recurring = client.get(
+        f"/api/v1/recurring-transactions/{recurring_id}", headers=headers
+    ).get_json()["data"]
+    assert recurring["last_generated"] is None
+
+    all_transactions = client.get(
+        "/api/v1/transactions?per_page=100", headers=headers
+    ).get_json()["data"]
+    assert len(all_transactions) == 1  # só a "Compra avulsa"
+
+
 def test_cannot_use_account_from_another_user(client, auth_headers):
     headers_a = auth_headers(email="a@example.com")
     headers_b = auth_headers(email="b@example.com")

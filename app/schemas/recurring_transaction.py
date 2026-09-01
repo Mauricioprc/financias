@@ -7,6 +7,7 @@ TRANSACTION_TYPES = ("income", "expense")
 class RecurringTransactionCreateSchema(Schema):
     account_id = fields.Integer(required=True)
     category_id = fields.Integer(required=False, load_default=None, allow_none=True)
+    credit_card_id = fields.Integer(required=False, load_default=None, allow_none=True)
     description = fields.String(required=True, validate=validate.Length(min=1, max=255))
     type = fields.String(required=True, validate=validate.OneOf(TRANSACTION_TYPES))
     amount = fields.Decimal(required=True, as_string=False, validate=validate.Range(min=0.01))
@@ -26,9 +27,18 @@ class RecurringTransactionCreateSchema(Schema):
                 "end_date deve ser posterior a start_date.", field_name="end_date"
             )
 
+    @validates_schema
+    def validate_card_requires_expense(self, data, **kwargs):
+        if data.get("credit_card_id") is not None and data.get("type") != "expense":
+            raise ValidationError(
+                "Recorrências no cartão de crédito devem ser do tipo expense.",
+                field_name="credit_card_id",
+            )
+
 
 class RecurringTransactionUpdateSchema(Schema):
     category_id = fields.Integer(required=False, allow_none=True)
+    credit_card_id = fields.Integer(required=False, allow_none=True)
     description = fields.String(required=False, validate=validate.Length(min=1, max=255))
     amount = fields.Decimal(required=False, as_string=False, validate=validate.Range(min=0.01))
     day_of_month = fields.Integer(
@@ -42,6 +52,7 @@ class RecurringTransactionOutSchema(Schema):
     id = fields.Integer()
     account_id = fields.Integer()
     category_id = fields.Integer(allow_none=True)
+    credit_card_id = fields.Integer(allow_none=True)
     description = fields.String()
     type = fields.String()
     amount = fields.Decimal(as_string=True)
