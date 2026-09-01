@@ -4,6 +4,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.models.goal import Goal
 from app.services.exceptions import NotFoundError, ValidationError
+from app.services.ledger_utils import adjust_goal_amount
 
 
 def list_goals(user_id: int) -> list[Goal]:
@@ -49,12 +50,26 @@ def delete_goal(user_id: int, goal_id: int) -> None:
 
 
 def contribute_to_goal(user_id: int, goal_id: int, amount: Decimal) -> Goal:
-    goal = get_goal(user_id, goal_id)
+    # SELECT ... FOR UPDATE: trava a linha da meta antes de decidir o
+    # status "achieved" com base em current_amount — mesmo motivo do
+    # with_for_update em invoice_service.register_payment: sem o lock,
+    # duas contribuições concorrentes podem ler o mesmo current_amount
+    # desatualizado e nenhuma (ou as duas, de forma inconsistente) marcar
+    # a meta como atingida corretamente.
+    goal = (
+        db.session.query(Goal)
+        .filter_by(id=goal_id, user_id=user_id)
+        .with_for_update()
+        .first()
+    )
+    if goal is None:
+        raise NotFoundError("Meta não encontrada.")
     if goal.status != "in_progress":
         raise ValidationError("Só é possível contribuir para metas em andamento.")
 
-    goal.current_amount += amount
-    if goal.current_amount >= goal.target_amount:
+    new_amount = goal.current_amount + amount
+    adjust_goal_amount(goal.id, amount)
+    if new_amount >= goal.target_amount:
         goal.status = "achieved"
 
     db.session.commit()

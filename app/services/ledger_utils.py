@@ -20,6 +20,7 @@ from sqlalchemy import update
 
 from app.extensions import db
 from app.models.account import Account
+from app.models.goal import Goal
 from app.models.invoice import Invoice
 
 
@@ -27,6 +28,13 @@ def adjust_account_balance(account_id: int, delta: Decimal) -> None:
     """Aplica `current_balance += delta` via UPDATE atômico no banco."""
     db.session.execute(
         update(Account).where(Account.id == account_id).values(current_balance=Account.current_balance + delta)
+    )
+
+
+def adjust_goal_amount(goal_id: int, delta: Decimal) -> None:
+    """Aplica `current_amount += delta` via UPDATE atômico no banco."""
+    db.session.execute(
+        update(Goal).where(Goal.id == goal_id).values(current_amount=Goal.current_amount + delta)
     )
 
 
