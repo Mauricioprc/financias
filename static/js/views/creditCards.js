@@ -70,14 +70,18 @@ async function renderCreditCardsView(container) {
     transformSubmit: toAccountId,
     loadItems: async () => {
       const cards = await Api.creditCards.list();
-      const openInvoices = await Promise.all(
-        cards.map((c) =>
-          Api.invoices.list({ credit_card_id: c.id, status: "open" }).catch(() => [])
-        )
-      );
+      const [openInvoices, currentInvoices] = await Promise.all([
+        Promise.all(
+          cards.map((c) =>
+            Api.invoices.list({ credit_card_id: c.id, status: "open" }).catch(() => [])
+          )
+        ),
+        Promise.all(cards.map((c) => Api.creditCards.currentInvoice(c.id).catch(() => null))),
+      ]);
       return cards.map((c, i) => ({
         ...c,
         usedAmount: openInvoices[i].reduce((sum, inv) => sum + Number(inv.total_amount), 0),
+        currentInvoice: currentInvoices[i],
       }));
     },
     createItem: (data) => Api.creditCards.create(data),
@@ -87,10 +91,16 @@ async function renderCreditCardsView(container) {
       const limit = Number(c.credit_limit) || 1;
       const pct = Math.min(100, Math.round((c.usedAmount / limit) * 100));
       const accountLabel = c.account_id ? accountNameById[String(c.account_id)] : null;
+      const currentInvoiceLabel = c.currentInvoice
+        ? c.currentInvoice.persisted
+          ? `fatura atual: ${UI.money(c.currentInvoice.total_amount)}`
+          : "fatura atual: ainda sem compras"
+        : null;
       const subtitleParts = [
         `${UI.money(c.usedAmount)} de ${UI.money(c.credit_limit)} usados (${pct}%)`,
         `fecha dia ${c.closing_day}, vence dia ${c.due_day}`,
         accountLabel ? `conta: ${accountLabel}` : null,
+        currentInvoiceLabel,
       ].filter(Boolean);
       return {
         title:

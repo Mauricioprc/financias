@@ -54,11 +54,20 @@ async function renderInvoicesView(container, params) {
       const remaining = Number(inv.total_amount) - Number(inv.paid_amount);
       const actions = UI.el("div", { class: "list-item__actions" });
 
+      // e.stopPropagation() nos botões de ação: o list-item inteiro navega
+      // pro detalhe ao ser clicado (ver onclick abaixo), então um clique
+      // num desses botões não pode também disparar essa navegação.
       if (inv.status === "open") {
         actions.appendChild(
           UI.el(
             "button",
-            { class: "btn btn--secondary btn--sm", onclick: () => handleClose(inv) },
+            {
+              class: "btn btn--secondary btn--sm",
+              onclick: (e) => {
+                e.stopPropagation();
+                handleClose(inv);
+              },
+            },
             "Fechar"
           )
         );
@@ -66,7 +75,13 @@ async function renderInvoicesView(container, params) {
         actions.appendChild(
           UI.el(
             "button",
-            { class: "btn btn--primary btn--sm", onclick: () => handlePayInFull(inv) },
+            {
+              class: "btn btn--primary btn--sm",
+              onclick: (e) => {
+                e.stopPropagation();
+                handlePayInFull(inv);
+              },
+            },
             "Pagar tudo"
           )
         );
@@ -76,7 +91,13 @@ async function renderInvoicesView(container, params) {
         actions.appendChild(
           UI.el(
             "button",
-            { class: "btn btn--secondary btn--sm", onclick: () => handleRegisterPayment(inv) },
+            {
+              class: "btn btn--secondary btn--sm",
+              onclick: (e) => {
+                e.stopPropagation();
+                handleRegisterPayment(inv);
+              },
+            },
             "Registrar pagamento"
           )
         );
@@ -91,21 +112,28 @@ async function renderInvoicesView(container, params) {
       }
 
       list.appendChild(
-        UI.el("div", { class: "list-item" }, [
-          UI.el("div", { class: "list-item__main" }, [
-            UI.el("div", { class: "list-item__title" }, [
-              `Referência ${UI.dateBR(inv.reference_month)} `,
-              UI.el(
-                "span",
-                { class: `badge badge--${inv.status}` },
-                INVOICE_STATUS_LABELS[inv.status]
-              ),
+        UI.el(
+          "div",
+          {
+            class: "list-item list-item--clickable",
+            onclick: () => Router.navigate(`/invoices/${inv.id}/detail`),
+          },
+          [
+            UI.el("div", { class: "list-item__main" }, [
+              UI.el("div", { class: "list-item__title" }, [
+                `Referência ${UI.dateBR(inv.reference_month)} `,
+                UI.el(
+                  "span",
+                  { class: `badge badge--${inv.status}` },
+                  INVOICE_STATUS_LABELS[inv.status]
+                ),
+              ]),
+              UI.el("div", { class: "list-item__subtitle" }, subtitleParts.join(" · ")),
             ]),
-            UI.el("div", { class: "list-item__subtitle" }, subtitleParts.join(" · ")),
-          ]),
-          UI.el("div", { class: "list-item__value" }, UI.money(inv.total_amount)),
-          actions.childNodes.length ? actions : null,
-        ])
+            UI.el("div", { class: "list-item__value" }, UI.money(inv.total_amount)),
+            actions.childNodes.length ? actions : null,
+          ]
+        )
       );
     });
     container.appendChild(list);

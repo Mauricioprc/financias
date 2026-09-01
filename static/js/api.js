@@ -176,11 +176,13 @@ const Api = (() => {
       create: (data) => post("/credit-cards", data).then((r) => r.data),
       update: (id, data) => patch(`/credit-cards/${id}`, data).then((r) => r.data),
       remove: (id) => del(`/credit-cards/${id}`),
+      currentInvoice: (id) => get(`/credit-cards/${id}/current-invoice`).then((r) => r.data),
     },
 
     invoices: {
       list: (query) => get("/invoices", query).then((r) => r.data),
       get: (id) => get(`/invoices/${id}`).then((r) => r.data),
+      detail: (id) => get(`/invoices/${id}/detail`).then((r) => r.data),
       pendingClosure: () => get("/invoices/pending-closure").then((r) => r.data),
       close: (id) => post(`/invoices/${id}/close`).then((r) => r.data),
       pay: (id, accountId) =>
