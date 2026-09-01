@@ -42,7 +42,13 @@ def _get_owned_credit_card(user_id: int, credit_card_id: int | None) -> CreditCa
     return card
 
 
-def _next_occurrence(recurring: RecurringTransaction, after: date | None) -> date:
+def next_occurrence(recurring: RecurringTransaction, after: date | None) -> date:
+    """Próxima data de ocorrência de `recurring` depois de `after` (`None`
+    significa "nenhuma ocorrência ainda gerada" — retorna `start_date`).
+    Pública porque `insights_service.forecast_account_balance` reaproveita
+    exatamente essa lógica (mesma referência de "a partir de onde conta"
+    que `generate_due_transactions` usa via `recurring.last_generated`)
+    pra projetar ocorrências futuras sem persistir nada."""
     if after is None:
         return recurring.start_date
 
@@ -174,7 +180,7 @@ def generate_due_transactions(
 
     try:
         while True:
-            next_date = _next_occurrence(recurring, cursor)
+            next_date = next_occurrence(recurring, cursor)
             if next_date > until:
                 break
             if recurring.end_date is not None and next_date > recurring.end_date:
