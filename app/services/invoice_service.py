@@ -95,6 +95,24 @@ def list_invoices(
     return query.order_by(Invoice.reference_month.desc()).all()
 
 
+def list_invoices_pending_closure(user_id: int) -> list[Invoice]:
+    """Faturas `open` cujo `closing_date` já passou — candidatas a
+    confirmação de fechamento pelo usuário. Não fecha nada sozinho: o
+    fechamento continua sendo uma ação explícita via `close_invoice`
+    (endpoint `POST /invoices/{id}/close`). Esta função só sinaliza."""
+    today = date.today()
+    return (
+        db.session.query(Invoice)
+        .filter(
+            Invoice.user_id == user_id,
+            Invoice.status == "open",
+            Invoice.closing_date <= today,
+        )
+        .order_by(Invoice.closing_date.asc())
+        .all()
+    )
+
+
 def get_invoice(user_id: int, invoice_id: int) -> Invoice:
     invoice = db.session.query(Invoice).filter_by(id=invoice_id, user_id=user_id).first()
     if invoice is None:

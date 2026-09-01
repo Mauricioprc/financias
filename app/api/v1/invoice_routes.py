@@ -29,6 +29,16 @@ def list_invoices_route(query, user_id):
     return jsonify({"data": out_schema.dump(invoices, many=True), "meta": {"total": len(invoices)}})
 
 
+@bp.route("/pending-closure", methods=["GET"])
+@require_user
+def list_invoices_pending_closure_route(user_id):
+    """Faturas `open` com `closing_date` já vencida — o frontend usa isso
+    pra decidir se mostra o prompt de confirmação de fechamento. Não fecha
+    nada: o fechamento continua sendo `POST /invoices/{id}/close`."""
+    invoices = invoice_service.list_invoices_pending_closure(user_id)
+    return jsonify({"data": out_schema.dump(invoices, many=True), "meta": {"total": len(invoices)}})
+
+
 @bp.route("/<int:invoice_id>", methods=["GET"])
 @require_user
 def get_invoice_route(user_id, invoice_id):

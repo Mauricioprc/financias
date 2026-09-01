@@ -343,3 +343,70 @@ def test_cannot_use_credit_card_from_another_user(client, auth_headers):
 
     resp = _buy(client, headers_b, account_id_b, card_id, 50.0, "2026-07-05")
     assert resp.status_code == 422
+
+
+def test_pending_closure_lists_overdue_open_invoices_only(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=10)
+
+    # Vencida: fatura de referência 2020-01, fechou em 2020-01-10, bem no
+    # passado em relação a "hoje".
+    resp = _buy(client, headers, account_id, card_id, 100.0, "2020-01-05")
+    overdue_invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    # Não vencida: fatura de referência num futuro distante, closing_date
+    # ainda não chegou.
+    _buy(client, headers, account_id, card_id, 50.0, "2099-01-05")
+
+    resp = client.get("/api/v1/invoices/pending-closure", headers=headers)
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["meta"]["total"] == 1
+    assert body["data"][0]["id"] == overdue_invoice_id
+    assert body["data"][0]["status"] == "open"
+
+
+def test_pending_closure_excludes_closed_and_paid_invoices(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=10)
+
+    resp = _buy(client, headers, account_id, card_id, 100.0, "2020-01-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    resp = client.get("/api/v1/invoices/pending-closure", headers=headers)
+    assert resp.get_json()["meta"]["total"] == 1
+
+    client.post(f"/api/v1/invoices/{invoice_id}/close", headers=headers)
+    resp = client.get("/api/v1/invoices/pending-closure", headers=headers)
+    assert resp.get_json()["meta"]["total"] == 0
+
+    client.post(
+        f"/api/v1/invoices/{invoice_id}/pay", json={"account_id": account_id}, headers=headers
+    )
+    resp = client.get("/api/v1/invoices/pending-closure", headers=headers)
+    assert resp.get_json()["meta"]["total"] == 0
+
+
+def test_pending_closure_orders_multiple_overdue_invoices_by_closing_date(client, auth_headers):
+    headers = auth_headers()
+    card_a, account_id = _setup_card_and_account(client, headers, closing_day=10)
+    resp = client.post(
+        "/api/v1/credit-cards",
+        json={"name": "Outro cartão", "credit_limit": 3000.0, "closing_day": 5, "due_day": 15},
+        headers=headers,
+    )
+    card_b = resp.get_json()["data"]["id"]
+
+    resp_a = _buy(client, headers, account_id, card_a, 100.0, "2020-03-05")  # closing 2020-03-10
+    resp_b = _buy(client, headers, account_id, card_b, 200.0, "2020-01-03")  # closing 2020-01-05
+    resp_c = _buy(client, headers, account_id, card_a, 300.0, "2020-02-05")  # closing 2020-02-10
+
+    invoice_a = resp_a.get_json()["data"]["invoice_id"]
+    invoice_b = resp_b.get_json()["data"]["invoice_id"]
+    invoice_c = resp_c.get_json()["data"]["invoice_id"]
+
+    resp = client.get("/api/v1/invoices/pending-closure", headers=headers)
+    body = resp.get_json()
+    assert body["meta"]["total"] == 3
+    ids_in_order = [item["id"] for item in body["data"]]
+    assert ids_in_order == [invoice_b, invoice_c, invoice_a]
