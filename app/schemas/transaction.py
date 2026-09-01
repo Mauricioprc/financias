@@ -59,6 +59,7 @@ class TransactionListQuerySchema(Schema):
     account_id = fields.Integer(required=False)
     category_id = fields.Integer(required=False)
     credit_card_id = fields.Integer(required=False)
+    invoice_id = fields.Integer(required=False)
     type = fields.String(required=False, validate=validate.OneOf(TRANSACTION_TYPES))
     date_from = fields.Date(required=False)
     date_to = fields.Date(required=False)

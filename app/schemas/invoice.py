@@ -1,5 +1,7 @@
 from marshmallow import Schema, fields, validate
 
+from app.schemas.transaction import TransactionOutSchema
+
 
 class InvoicePaySchema(Schema):
     account_id = fields.Integer(required=True)
@@ -34,3 +36,16 @@ class InvoiceListQuerySchema(Schema):
     status = fields.String(
         required=False, validate=validate.OneOf(("open", "closed", "paid"))
     )
+
+
+class CategorySummaryItemSchema(Schema):
+    category_id = fields.Integer(allow_none=True)
+    category_name = fields.String()
+    total_amount = fields.Decimal(as_string=True)
+
+
+class InvoiceDetailSchema(Schema):
+    invoice = fields.Nested(InvoiceOutSchema)
+    remaining = fields.Decimal(as_string=True)
+    transactions = fields.List(fields.Nested(TransactionOutSchema))
+    category_summary = fields.List(fields.Nested(CategorySummaryItemSchema))

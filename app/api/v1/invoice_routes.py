@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify
 
 from app.api.decorators import require_user, validate_json, validate_query
 from app.schemas.invoice import (
+    InvoiceDetailSchema,
     InvoiceListQuerySchema,
     InvoiceOutSchema,
     InvoicePaymentSchema,
@@ -12,6 +13,7 @@ from app.services import invoice_service
 bp = Blueprint("invoices", __name__)
 
 out_schema = InvoiceOutSchema()
+detail_schema = InvoiceDetailSchema()
 list_query_schema = InvoiceListQuerySchema()
 pay_schema = InvoicePaySchema()
 payment_schema = InvoicePaymentSchema()
@@ -44,6 +46,16 @@ def list_invoices_pending_closure_route(user_id):
 def get_invoice_route(user_id, invoice_id):
     invoice = invoice_service.get_invoice(user_id, invoice_id)
     return jsonify({"data": out_schema.dump(invoice), "meta": {}})
+
+
+@bp.route("/<int:invoice_id>/detail", methods=["GET"])
+@require_user
+def get_invoice_detail_route(user_id, invoice_id):
+    """Fatura completa: dados dela + todas as transações (parcelas
+    incluídas) + resumo do total gasto por categoria, já calculado no
+    service."""
+    detail = invoice_service.get_invoice_detail(user_id, invoice_id)
+    return jsonify({"data": detail_schema.dump(detail), "meta": {}})
 
 
 @bp.route("/<int:invoice_id>/close", methods=["POST"])

@@ -443,3 +443,89 @@ def test_current_invoice_preview_with_transaction_returns_real_invoice(client, a
     assert data["persisted"] is True
     assert data["id"] == invoice_id
     assert data["total_amount"] == "75.00"
+
+
+def test_invoice_detail_returns_transactions_with_installments_and_category_summary(
+    client, auth_headers
+):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=10, due_day=20)
+
+    cat_mercado = client.post(
+        "/api/v1/categories", json={"name": "Mercado", "type": "expense"}, headers=headers
+    ).get_json()["data"]
+    cat_eletronicos = client.post(
+        "/api/v1/categories", json={"name": "Eletrônicos", "type": "expense"}, headers=headers
+    ).get_json()["data"]
+
+    resp = client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "category_id": cat_mercado["id"],
+            "type": "expense",
+            "description": "Compras da semana",
+            "amount": 30.0,
+            "date": "2026-07-05",
+        },
+        headers=headers,
+    )
+    regular_tx = resp.get_json()["data"]
+    invoice_id = regular_tx["invoice_id"]
+
+    resp = client.post(
+        "/api/v1/transactions/installment-purchases",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "category_id": cat_eletronicos["id"],
+            "description": "Notebook",
+            "total_amount": 100.0,
+            "installments": 2,
+            "date": "2026-07-05",
+        },
+        headers=headers,
+    )
+    installments = resp.get_json()["data"]
+    first_installment = next(t for t in installments if t["installment_number"] == 1)
+    assert first_installment["invoice_id"] == invoice_id  # cai na mesma fatura de julho
+
+    resp = client.get(f"/api/v1/invoices/{invoice_id}/detail", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+
+    assert data["invoice"]["id"] == invoice_id
+    assert data["invoice"]["total_amount"] == "80.00"
+    assert data["remaining"] == "80.00"
+
+    tx_ids = {t["id"] for t in data["transactions"]}
+    assert tx_ids == {regular_tx["id"], first_installment["id"]}
+
+    dumped_first_installment = next(
+        t for t in data["transactions"] if t["id"] == first_installment["id"]
+    )
+    assert dumped_first_installment["installment_number"] == 1
+    assert dumped_first_installment["installment_total"] == 2
+    assert dumped_first_installment["amount"] == "50.00"
+
+    dumped_regular = next(t for t in data["transactions"] if t["id"] == regular_tx["id"])
+    assert dumped_regular["installment_number"] is None
+    assert dumped_regular["installment_total"] is None
+
+    # Resumo por categoria bate com a soma manual esperada.
+    summary_by_category = {item["category_id"]: item["total_amount"] for item in data["category_summary"]}
+    assert summary_by_category[cat_mercado["id"]] == "30.00"
+    assert summary_by_category[cat_eletronicos["id"]] == "50.00"
+    assert len(data["category_summary"]) == 2
+
+
+def test_invoice_detail_from_another_user_is_not_found(client, auth_headers):
+    headers = auth_headers(email="dono@example.com")
+    card_id, account_id = _setup_card_and_account(client, headers)
+    resp = _buy(client, headers, account_id, card_id, 50.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    other_headers = auth_headers(email="intruso@example.com")
+    resp = client.get(f"/api/v1/invoices/{invoice_id}/detail", headers=other_headers)
+    assert resp.status_code == 404

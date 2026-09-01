@@ -28,6 +28,7 @@ def list_transactions_route(query, user_id):
         account_id=query.get("account_id"),
         category_id=query.get("category_id"),
         credit_card_id=query.get("credit_card_id"),
+        invoice_id=query.get("invoice_id"),
         type=query.get("type"),
         date_from=query.get("date_from"),
         date_to=query.get("date_to"),

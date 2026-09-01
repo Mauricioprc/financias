@@ -57,6 +57,7 @@ def list_transactions(
     account_id: int | None = None,
     category_id: int | None = None,
     credit_card_id: int | None = None,
+    invoice_id: int | None = None,
     type: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -71,6 +72,8 @@ def list_transactions(
         query = query.filter(Transaction.category_id == category_id)
     if credit_card_id is not None:
         query = query.filter(Transaction.credit_card_id == credit_card_id)
+    if invoice_id is not None:
+        query = query.filter(Transaction.invoice_id == invoice_id)
     if type is not None:
         query = query.filter(Transaction.type == type)
     if date_from is not None:

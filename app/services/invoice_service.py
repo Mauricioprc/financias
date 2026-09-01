@@ -2,8 +2,11 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+from sqlalchemy import func
+
 from app.extensions import db
 from app.models.account import Account
+from app.models.category import Category
 from app.models.credit_card import CreditCard
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
@@ -176,6 +179,54 @@ def get_invoice(user_id: int, invoice_id: int) -> Invoice:
     if invoice is None:
         raise NotFoundError("Fatura não encontrada.")
     return invoice
+
+
+def get_invoice_detail(user_id: int, invoice_id: int) -> dict:
+    """Detalhe completo de uma fatura: os dados dela, todas as transações
+    (parcelas incluídas — `installment_number`/`installment_total` já vêm
+    no `TransactionOutSchema`) e um resumo do total gasto por categoria.
+
+    Import local de `transaction_service` pra evitar import circular — ele
+    já importa `invoice_service` no nível de módulo (usa
+    `get_or_create_open_invoice`/`assert_invoice_open`/`add_amount`).
+    """
+    from app.services import transaction_service
+
+    invoice = get_invoice(user_id, invoice_id)
+
+    # per_page bem acima de qualquer volume real de parcelas/compras numa
+    # única fatura — aqui queremos a fatura inteira, não uma página dela.
+    transactions, _total = transaction_service.list_transactions(
+        user_id=user_id, invoice_id=invoice.id, page=1, per_page=10_000
+    )
+
+    category_totals = (
+        db.session.query(
+            Transaction.category_id,
+            Category.name,
+            func.coalesce(func.sum(Transaction.amount), 0),
+        )
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .filter(Transaction.invoice_id == invoice.id, Transaction.user_id == user_id)
+        .group_by(Transaction.category_id, Category.name)
+        .order_by(func.coalesce(func.sum(Transaction.amount), 0).desc())
+        .all()
+    )
+    category_summary = [
+        {
+            "category_id": category_id,
+            "category_name": name if category_id is not None else "Sem categoria",
+            "total_amount": total_amount,
+        }
+        for category_id, name, total_amount in category_totals
+    ]
+
+    return {
+        "invoice": invoice,
+        "remaining": invoice.total_amount - invoice.paid_amount,
+        "transactions": transactions,
+        "category_summary": category_summary,
+    }
 
 
 def close_invoice(user_id: int, invoice_id: int) -> Invoice:
