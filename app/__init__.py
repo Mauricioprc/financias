@@ -23,10 +23,12 @@ def create_app(config_name: str | None = None) -> Flask:
     from app import models  # noqa: F401  (garante que os models sejam registrados no metadata)
     from app.api.errors import register_error_handlers
     from app.api.v1 import register_v1_blueprints
+    from app.cli import register_cli
     from bot.webhook import bp as bot_webhook_bp
 
     register_error_handlers(app)
     register_v1_blueprints(app)
+    register_cli(app)
     app.register_blueprint(bot_webhook_bp, url_prefix="/bot")
 
     @app.route("/")
