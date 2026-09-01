@@ -11,7 +11,7 @@ class Config:
         minutes=int(os.environ.get("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "30"))
     )
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(
-        days=int(os.environ.get("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "30"))
+        days=int(os.environ.get("JWT_REFRESH_TOKEN_EXPIRES_DAYS", "7"))
     )
 
     # Bot WhatsApp (Fase D)

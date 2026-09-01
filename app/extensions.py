@@ -50,3 +50,17 @@ def _handle_invalid_token(reason: str):
 @jwt.expired_token_loader
 def _handle_expired_token(jwt_header, jwt_payload):
     return _auth_error("TOKEN_EXPIRED", "Token de autenticação expirado.", 401)
+
+
+@jwt.token_in_blocklist_loader
+def _check_if_token_revoked(jwt_header: dict, jwt_payload: dict) -> bool:
+    # Import local pra evitar import circular (o model importa `db` daqui).
+    from app.models.revoked_token import RevokedToken
+
+    jti = jwt_payload["jti"]
+    return db.session.query(RevokedToken.id).filter_by(jti=jti).first() is not None
+
+
+@jwt.revoked_token_loader
+def _handle_revoked_token(jwt_header: dict, jwt_payload: dict):
+    return _auth_error("TOKEN_REVOKED", "Este token foi revogado (logout).", 401)

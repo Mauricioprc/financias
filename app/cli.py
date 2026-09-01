@@ -11,12 +11,14 @@ from app.extensions import db
 from app.models.account import Account
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
+from app.services.auth_service import cleanup_expired_revoked_tokens
 
 logger = logging.getLogger(__name__)
 
 
 def register_cli(app: Flask) -> None:
     app.cli.add_command(reconcile_balances)
+    app.cli.add_command(cleanup_revoked_tokens)
 
 
 def _expected_balance(account: Account) -> Decimal:
@@ -98,3 +100,13 @@ def reconcile_balances() -> None:
         click.echo("[reconcile-balances] nenhuma divergência encontrada.")
     else:
         click.echo(f"[reconcile-balances] {divergent} conta(s) com divergência encontrada(s).")
+
+
+@click.command("cleanup-revoked-tokens")
+def cleanup_revoked_tokens() -> None:
+    """Remove da blocklist de JWT (`revoked_tokens`) os tokens já
+    expirados. Não precisa ser cron automático — pode ser rodado
+    manualmente de tempos em tempos; a tabela só cresce O(nº de logouts),
+    então não é urgente."""
+    deleted = cleanup_expired_revoked_tokens()
+    click.echo(f"[cleanup-revoked-tokens] {deleted} token(s) expirado(s) removido(s) da blocklist.")

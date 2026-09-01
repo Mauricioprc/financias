@@ -1,5 +1,13 @@
-from flask import Blueprint, jsonify
-from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
+from datetime import datetime, timezone
+
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import (
+    create_access_token,
+    decode_token,
+    get_jwt,
+    get_jwt_identity,
+    jwt_required,
+)
 
 from app.api.decorators import require_user, validate_json
 from app.extensions import db, limit_key_by_attempted_email, limiter
@@ -46,6 +54,39 @@ def refresh():
     identity = get_jwt_identity()
     access_token = create_access_token(identity=identity)
     return jsonify({"data": {"access_token": access_token}, "meta": {}})
+
+
+@bp.route("/logout", methods=["POST"])
+@jwt_required(refresh=True)
+def logout():
+    """Revoga o refresh token atual (enviado no header Authorization) e,
+    opcionalmente, um access_token passado no corpo — pra logout também
+    invalidar a sessão "ativa" na hora, sem esperar ele expirar."""
+    claims = get_jwt()
+    expires_at = datetime.fromtimestamp(claims["exp"], tz=timezone.utc)
+    auth_service.revoke_token(
+        jti=claims["jti"],
+        token_type="refresh",
+        user_id=int(get_jwt_identity()),
+        expires_at=expires_at,
+    )
+
+    payload = request.get_json(silent=True) or {}
+    access_token = payload.get("access_token")
+    if access_token:
+        try:
+            access_claims = decode_token(access_token)
+        except Exception:
+            access_claims = None
+        if access_claims is not None and access_claims.get("type") == "access":
+            auth_service.revoke_token(
+                jti=access_claims["jti"],
+                token_type="access",
+                user_id=int(access_claims["sub"]),
+                expires_at=datetime.fromtimestamp(access_claims["exp"], tz=timezone.utc),
+            )
+
+    return jsonify({"data": {"revoked": True}, "meta": {}})
 
 
 @bp.route("/me", methods=["GET"])

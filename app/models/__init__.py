@@ -7,6 +7,7 @@ from app.models.goal import Goal
 from app.models.investment import Investment
 from app.models.invoice import Invoice
 from app.models.recurring_transaction import RecurringTransaction
+from app.models.revoked_token import RevokedToken
 from app.models.transaction import Transaction
 from app.models.transfer import Transfer
 from app.models.user import User
@@ -22,6 +23,7 @@ __all__ = [
     "Investment",
     "Invoice",
     "RecurringTransaction",
+    "RevokedToken",
     "Transaction",
     "Transfer",
 ]
