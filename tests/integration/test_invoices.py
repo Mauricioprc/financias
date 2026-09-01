@@ -410,3 +410,36 @@ def test_pending_closure_orders_multiple_overdue_invoices_by_closing_date(client
     assert body["meta"]["total"] == 3
     ids_in_order = [item["id"] for item in body["data"]]
     assert ids_in_order == [invoice_b, invoice_c, invoice_a]
+
+
+def test_current_invoice_preview_without_transactions(client, auth_headers):
+    headers = auth_headers()
+    card_id, _account_id = _setup_card_and_account(client, headers, closing_day=10, due_day=20)
+
+    resp = client.get(f"/api/v1/credit-cards/{card_id}/current-invoice", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["persisted"] is False
+    assert data["total_amount"] == "0.00"
+    assert data["paid_amount"] == "0.00"
+    assert data["status"] == "open"
+    assert data["credit_card_id"] == card_id
+    assert data["id"] is None
+
+
+def test_current_invoice_preview_with_transaction_returns_real_invoice(client, auth_headers):
+    from datetime import date
+
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=28, due_day=5)
+
+    today = date.today().isoformat()
+    resp = _buy(client, headers, account_id, card_id, 75.0, today)
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    resp = client.get(f"/api/v1/credit-cards/{card_id}/current-invoice", headers=headers)
+    assert resp.status_code == 200
+    data = resp.get_json()["data"]
+    assert data["persisted"] is True
+    assert data["id"] == invoice_id
+    assert data["total_amount"] == "75.00"

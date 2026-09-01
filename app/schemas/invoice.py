@@ -20,8 +20,13 @@ class InvoiceOutSchema(Schema):
     paid_amount = fields.Decimal(as_string=True)
     status = fields.String()
     paid_at = fields.DateTime(allow_none=True)
-    created_at = fields.DateTime()
-    updated_at = fields.DateTime()
+    created_at = fields.DateTime(allow_none=True)
+    updated_at = fields.DateTime(allow_none=True)
+    # dump_default=True: toda fatura persistida de verdade (a imensa
+    # maioria dos usos deste schema) é `persisted=True` sem precisar setar
+    # nada explicitamente — só o preview de invoice_service.py
+    # (get_current_invoice_preview) passa `persisted=False` de propósito.
+    persisted = fields.Boolean(dump_default=True)
 
 
 class InvoiceListQuerySchema(Schema):

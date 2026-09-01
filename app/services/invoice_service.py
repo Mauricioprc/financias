@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -38,6 +39,63 @@ def compute_invoice_period(
 
     reference_month = date(ref_year, ref_month, 1)
     return reference_month, closing_date_, due_date_
+
+
+@dataclass
+class InvoicePreview:
+    """Fatura "projetada" pro período atual de um cartão, quando ainda não
+    existe nenhuma linha em `invoices` pra esse período (nenhuma compra
+    feita ainda). Tem o mesmo formato de campos que `InvoiceOutSchema`
+    espera de um `Invoice` de verdade — `persisted=False` é o que
+    diferencia pro frontend."""
+
+    credit_card_id: int
+    reference_month: date
+    closing_date: date
+    due_date: date
+    total_amount: Decimal
+    paid_amount: Decimal
+    status: str
+    persisted: bool
+    id: int | None = None
+    paid_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+def get_current_invoice_preview(user_id: int, credit_card_id: int) -> "Invoice | InvoicePreview":
+    """Fatura do período atual de um cartão — a que uma compra feita hoje
+    entraria, via `compute_invoice_period`. Se já existir uma linha
+    persistida pra esse período (alguma compra já feita), retorna ela.
+    Caso contrário, NÃO cria nada — só monta uma prévia em memória com
+    total/paid em zero, pro frontend poder mostrar "sua fatura atual" antes
+    da primeira compra."""
+    card = db.session.query(CreditCard).filter_by(id=credit_card_id, user_id=user_id).first()
+    if card is None:
+        raise NotFoundError("Cartão de crédito não encontrado.")
+
+    reference_month, closing_date_, due_date_ = compute_invoice_period(
+        date.today(), card.closing_day, card.due_day
+    )
+
+    invoice = (
+        db.session.query(Invoice)
+        .filter_by(user_id=user_id, credit_card_id=card.id, reference_month=reference_month)
+        .first()
+    )
+    if invoice is not None:
+        return invoice
+
+    return InvoicePreview(
+        credit_card_id=card.id,
+        reference_month=reference_month,
+        closing_date=closing_date_,
+        due_date=due_date_,
+        total_amount=Decimal("0.00"),
+        paid_amount=Decimal("0.00"),
+        status="open",
+        persisted=False,
+    )
 
 
 def get_or_create_open_invoice(

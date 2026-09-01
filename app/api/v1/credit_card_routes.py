@@ -6,13 +6,15 @@ from app.schemas.credit_card import (
     CreditCardOutSchema,
     CreditCardUpdateSchema,
 )
-from app.services import credit_card_service
+from app.schemas.invoice import InvoiceOutSchema
+from app.services import credit_card_service, invoice_service
 
 bp = Blueprint("credit_cards", __name__)
 
 create_schema = CreditCardCreateSchema()
 update_schema = CreditCardUpdateSchema()
 out_schema = CreditCardOutSchema()
+invoice_out_schema = InvoiceOutSchema()
 
 
 @bp.route("", methods=["GET"])
@@ -51,6 +53,16 @@ def get_credit_card_route(user_id, credit_card_id):
 def update_credit_card_route(payload, user_id, credit_card_id):
     card = credit_card_service.update_credit_card(user_id, credit_card_id, **payload)
     return jsonify({"data": out_schema.dump(card), "meta": {}})
+
+
+@bp.route("/<int:credit_card_id>/current-invoice", methods=["GET"])
+@require_user
+def get_current_invoice_route(user_id, credit_card_id):
+    """Fatura do período atual do cartão — real se já existir alguma
+    compra nesse período, ou uma prévia (`persisted: false`) com total 0
+    caso contrário."""
+    invoice = invoice_service.get_current_invoice_preview(user_id, credit_card_id)
+    return jsonify({"data": invoice_out_schema.dump(invoice), "meta": {}})
 
 
 @bp.route("/<int:credit_card_id>", methods=["DELETE"])
