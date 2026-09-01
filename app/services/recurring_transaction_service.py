@@ -9,6 +9,7 @@ from app.models.recurring_transaction import RecurringTransaction
 from app.models.transaction import Transaction
 from app.services import invoice_service
 from app.services.exceptions import ConflictError, NotFoundError, ServiceError, ValidationError
+from app.services.ledger_utils import adjust_account_balance
 from app.utils.datetime_utils import add_months, clamped_date
 
 
@@ -199,7 +200,7 @@ def generate_due_transactions(
                 invoice_service.add_amount(invoice, recurring.amount)
                 transaction.invoice_id = invoice.id
             else:
-                account.current_balance += _signed_amount(recurring.type, recurring.amount)
+                adjust_account_balance(account.id, _signed_amount(recurring.type, recurring.amount))
 
             db.session.add(transaction)
             generated.append(transaction)

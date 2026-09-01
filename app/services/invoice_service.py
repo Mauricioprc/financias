@@ -7,6 +7,7 @@ from app.models.credit_card import CreditCard
 from app.models.invoice import Invoice
 from app.models.transaction import Transaction
 from app.services.exceptions import ConflictError, NotFoundError, ValidationError
+from app.services.ledger_utils import adjust_account_balance, adjust_invoice_paid, adjust_invoice_total
 from app.utils.datetime_utils import add_months, clamped_date
 
 
@@ -76,11 +77,11 @@ def assert_invoice_open(invoice: Invoice) -> None:
 
 
 def add_amount(invoice: Invoice, amount: Decimal) -> None:
-    invoice.total_amount += amount
+    adjust_invoice_total(invoice, amount)
 
 
 def remove_amount(invoice: Invoice, amount: Decimal) -> None:
-    invoice.total_amount -= amount
+    adjust_invoice_total(invoice, -amount)
 
 
 def list_invoices(
@@ -129,7 +130,18 @@ def register_payment(user_id: int, invoice_id: int, account_id: int, amount: Dec
     vira `paid` na hora — ela ainda pode receber novas compras até fechar;
     ver `close_invoice` para a reavaliação nesse momento.
     """
-    invoice = get_invoice(user_id, invoice_id)
+    # SELECT ... FOR UPDATE: trava a linha da fatura antes de decidir com
+    # base em total_amount/paid_amount, evitando que dois pagamentos
+    # concorrentes leiam o mesmo `remaining` desatualizado e ambos passem
+    # na validação abaixo (o que faria paid_amount ultrapassar total_amount).
+    invoice = (
+        db.session.query(Invoice)
+        .filter_by(id=invoice_id, user_id=user_id)
+        .with_for_update()
+        .first()
+    )
+    if invoice is None:
+        raise NotFoundError("Fatura não encontrada.")
     if invoice.status == "paid":
         raise ConflictError("Esta fatura já foi paga.")
     if amount <= 0:
@@ -159,8 +171,8 @@ def register_payment(user_id: int, invoice_id: int, account_id: int, amount: Dec
         notes=None,
     )
     db.session.add(payment_transaction)
-    account.current_balance -= amount
-    invoice.paid_amount += amount
+    adjust_account_balance(account.id, -amount)
+    adjust_invoice_paid(invoice, amount)
 
     if invoice.status == "closed" and invoice.paid_amount >= invoice.total_amount:
         invoice.status = "paid"

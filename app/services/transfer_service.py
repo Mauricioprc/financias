@@ -5,6 +5,7 @@ from app.extensions import db
 from app.models.account import Account
 from app.models.transfer import Transfer
 from app.services.exceptions import NotFoundError, ValidationError
+from app.services.ledger_utils import adjust_account_balance
 
 
 def _get_owned_account(user_id: int, account_id: int) -> Account:
@@ -74,8 +75,8 @@ def create_transfer(
     )
     db.session.add(transfer)
 
-    from_account.current_balance -= amount
-    to_account.current_balance += amount
+    adjust_account_balance(from_account.id, -amount)
+    adjust_account_balance(to_account.id, amount)
 
     db.session.commit()
     return transfer
@@ -86,8 +87,8 @@ def delete_transfer(user_id: int, transfer_id: int) -> None:
     from_account = _get_owned_account(user_id, transfer.from_account_id)
     to_account = _get_owned_account(user_id, transfer.to_account_id)
 
-    from_account.current_balance += transfer.amount
-    to_account.current_balance -= transfer.amount
+    adjust_account_balance(from_account.id, transfer.amount)
+    adjust_account_balance(to_account.id, -transfer.amount)
 
     db.session.delete(transfer)
     db.session.commit()

@@ -10,6 +10,7 @@ from app.models.credit_card import CreditCard
 from app.models.transaction import Transaction
 from app.services import invoice_service
 from app.services.exceptions import NotFoundError, ValidationError
+from app.services.ledger_utils import adjust_account_balance
 from app.utils.datetime_utils import shift_date
 
 
@@ -125,7 +126,7 @@ def create_transaction(
         invoice_service.add_amount(invoice, amount)
         transaction.invoice_id = invoice.id
     elif is_paid:
-        account.current_balance += _signed_amount(type, amount)
+        adjust_account_balance(account.id, _signed_amount(type, amount))
 
     db.session.add(transaction)
     db.session.commit()
@@ -271,14 +272,14 @@ def _update_regular_transaction(
     new_account = _get_owned_account(user_id, new_account_id)
     _get_owned_category(user_id, new_category_id)
 
-    old_account.current_balance -= old_effect
+    adjust_account_balance(old_account.id, -old_effect)
 
     for key in ("account_id", "category_id", "description", "amount", "date", "is_paid", "notes"):
         if key in fields and fields[key] is not None:
             setattr(transaction, key, fields[key])
 
     new_effect = _signed_amount(transaction.type, new_amount) if new_is_paid else Decimal(0)
-    new_account.current_balance += new_effect
+    adjust_account_balance(new_account.id, new_effect)
 
     db.session.commit()
     return transaction
@@ -295,7 +296,7 @@ def delete_transaction(user_id: int, transaction_id: int) -> None:
     else:
         account = _get_owned_account(user_id, transaction.account_id)
         if transaction.is_paid:
-            account.current_balance -= _signed_amount(transaction.type, transaction.amount)
+            adjust_account_balance(account.id, -_signed_amount(transaction.type, transaction.amount))
 
     db.session.delete(transaction)
     db.session.commit()
