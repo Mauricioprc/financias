@@ -141,7 +141,14 @@ function updateChrome(path) {
   UI.qs("#sidebar").hidden = !showChrome;
   closeMoreSheet();
 
-  if (showChrome) updateActiveNav(path);
+  if (showChrome) {
+    updateActiveNav(path);
+    // Checagem de faturas vencidas aguardando confirmação de fechamento —
+    // PendingClosure.checkOnce() já garante que só dispara de verdade uma
+    // vez por sessão de aba (sessionStorage), mesmo sendo chamado a cada
+    // troca de rota.
+    PendingClosure.checkOnce();
+  }
 }
 
 document.addEventListener("route:change", (e) => updateChrome(e.detail.path));

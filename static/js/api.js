@@ -181,6 +181,7 @@ const Api = (() => {
     invoices: {
       list: (query) => get("/invoices", query).then((r) => r.data),
       get: (id) => get(`/invoices/${id}`).then((r) => r.data),
+      pendingClosure: () => get("/invoices/pending-closure").then((r) => r.data),
       close: (id) => post(`/invoices/${id}/close`).then((r) => r.data),
       pay: (id, accountId) =>
         post(`/invoices/${id}/pay`, { account_id: accountId }).then((r) => r.data),
