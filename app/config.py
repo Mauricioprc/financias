@@ -35,6 +35,11 @@ class TestingConfig(Config):
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
     JWT_SECRET_KEY = "test"
     SECRET_KEY = "test"
+    # Desligado por padrão pros testes existentes não tomarem 429 por
+    # bater várias vezes em /login e /register; os testes de rate limit
+    # (tests/integration/test_auth_rate_limit.py) reativam explicitamente
+    # via app.config["RATELIMIT_ENABLED"] = True.
+    RATELIMIT_ENABLED = False
 
 
 CONFIG_BY_NAME = {

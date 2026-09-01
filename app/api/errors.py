@@ -48,6 +48,21 @@ def register_error_handlers(app: Flask) -> None:
             404,
         )
 
+    @app.errorhandler(429)
+    def handle_rate_limit_exceeded(error):
+        return (
+            jsonify(
+                {
+                    "error": {
+                        "code": "RATE_LIMITED",
+                        "message": "Muitas tentativas. Tente novamente em alguns instantes.",
+                        "details": {},
+                    }
+                }
+            ),
+            429,
+        )
+
     @app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):
         logger.exception("Erro não tratado")

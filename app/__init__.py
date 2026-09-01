@@ -4,7 +4,7 @@ from pathlib import Path
 from flask import Flask, send_from_directory
 
 from app.config import CONFIG_BY_NAME
-from app.extensions import db, jwt, migrate
+from app.extensions import db, jwt, limiter, migrate
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = PROJECT_ROOT / "static"
@@ -19,6 +19,7 @@ def create_app(config_name: str | None = None) -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    limiter.init_app(app)
 
     from app import models  # noqa: F401  (garante que os models sejam registrados no metadata)
     from app.api.errors import register_error_handlers

@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
 
 from app.api.decorators import require_user, validate_json
-from app.extensions import db
+from app.extensions import db, limit_key_by_attempted_email, limiter
 from app.models.user import User
 from app.schemas.user import LoginSchema, RegisterSchema, UserOutSchema
 from app.services import auth_service
@@ -15,6 +15,8 @@ user_out_schema = UserOutSchema()
 
 
 @bp.route("/register", methods=["POST"])
+@limiter.limit("5 per minute")
+@limiter.limit("5 per minute", key_func=limit_key_by_attempted_email)
 @validate_json(register_schema)
 def register(payload):
     user = auth_service.register_user(
@@ -28,6 +30,8 @@ def register(payload):
 
 
 @bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
+@limiter.limit("5 per minute", key_func=limit_key_by_attempted_email)
 @validate_json(login_schema)
 def login(payload):
     user = auth_service.authenticate_user(email=payload["email"], password=payload["password"])
@@ -36,6 +40,7 @@ def login(payload):
 
 
 @bp.route("/refresh", methods=["POST"])
+@limiter.limit("30 per minute")
 @jwt_required(refresh=True)
 def refresh():
     identity = get_jwt_identity()

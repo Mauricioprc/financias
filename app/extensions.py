@@ -1,11 +1,36 @@
-from flask import jsonify
+import os
+
+from flask import jsonify, request
 from flask_jwt_extended import JWTManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 migrate = Migrate()
 jwt = JWTManager()
+
+# Storage em memória do processo (padrão do Flask-Limiter quando
+# storage_uri não é configurado): funciona porque o deploy atual
+# (PythonAnywhere, ver ARCHITECTURE.md) é single-process — cada worker
+# teria seu próprio contador se isso mudasse pra múltiplos processos, o
+# que tornaria o limite efetivo (limite × nº de workers). Se o deploy
+# passar a rodar múltiplos processos/workers, trocar pra um storage
+# compartilhado (ex.: Redis) via RATELIMIT_STORAGE_URI.
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
+)
+
+
+def limit_key_by_attempted_email() -> str:
+    """Chave de rate limit por email tentado (além do limite por IP) —
+    impede que um atacante distribua tentativas de login/registro de um
+    mesmo email entre vários IPs pra escapar do limite por IP."""
+    payload = request.get_json(silent=True) or {}
+    email = str(payload.get("email") or "").strip().lower()
+    return email or get_remote_address()
 
 
 def _auth_error(code: str, message: str, status_code: int):
