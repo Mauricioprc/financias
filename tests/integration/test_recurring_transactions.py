@@ -1,3 +1,8 @@
+from datetime import date
+
+from app.services import recurring_transaction_service
+
+
 def _create_account(client, headers, initial_balance=0.0):
     resp = client.post(
         "/api/v1/accounts",
@@ -362,6 +367,151 @@ def test_cannot_generate_subscription_into_a_closed_future_invoice(client, auth_
         "/api/v1/transactions?per_page=100", headers=headers
     ).get_json()["data"]
     assert len(all_transactions) == 1  # só a "Compra avulsa"
+
+
+def test_auto_generate_route_returns_empty_summary_with_no_subscriptions(client, auth_headers):
+    headers = auth_headers()
+
+    resp = client.post("/api/v1/recurring-transactions/auto-generate", headers=headers)
+    assert resp.status_code == 200
+    assert resp.get_json()["data"] == {"generated_count": 0, "errors": []}
+
+
+def test_auto_generate_only_touches_active_card_subscriptions(client, auth_headers):
+    headers = auth_headers()
+    account_id = _create_account(client, headers, initial_balance=100.0)
+    card_id = _create_card(client, headers, closing_day=10, due_day=20)
+
+    # Assinatura ativa no cartão — deve gerar.
+    sub = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Netflix",
+            "type": "expense",
+            "amount": 39.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",
+        },
+        headers=headers,
+    ).get_json()["data"]
+
+    # Recorrência normal (sem cartão) — não deve ser tocada pelo auto-generate.
+    salary = _create_recurring(
+        client, headers, account_id, type="income", start_date="2026-07-05"
+    ).get_json()["data"]
+
+    # Assinatura inativa — não deve gerar.
+    inactive_sub = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Spotify",
+            "type": "expense",
+            "amount": 19.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",
+        },
+        headers=headers,
+    ).get_json()["data"]
+    client.patch(
+        f"/api/v1/recurring-transactions/{inactive_sub['id']}",
+        json={"is_active": False},
+        headers=headers,
+    )
+
+    user_id = client.get("/api/v1/auth/me", headers=headers).get_json()["data"]["id"]
+    result = recurring_transaction_service.generate_due_subscriptions(
+        user_id, until=date(2026, 9, 30)
+    )
+    assert result["generated_count"] == 3  # Netflix: julho, agosto, setembro
+    assert result["errors"] == []
+
+    sub_after = client.get(
+        f"/api/v1/recurring-transactions/{sub['id']}", headers=headers
+    ).get_json()["data"]
+    assert sub_after["last_generated"] is not None
+
+    salary_after = client.get(
+        f"/api/v1/recurring-transactions/{salary['id']}", headers=headers
+    ).get_json()["data"]
+    assert salary_after["last_generated"] is None  # não foi tocada
+
+    inactive_after = client.get(
+        f"/api/v1/recurring-transactions/{inactive_sub['id']}", headers=headers
+    ).get_json()["data"]
+    assert inactive_after["last_generated"] is None  # inativa, não gerou
+
+
+def test_auto_generate_isolates_failure_of_one_subscription_from_others(client, auth_headers):
+    headers = auth_headers()
+    account_id = _create_account(client, headers, initial_balance=100.0)
+    card_id = _create_card(client, headers, closing_day=10, due_day=20)
+
+    # Fecha antecipadamente a fatura de agosto, pra fazer uma assinatura falhar.
+    august_purchase = client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "type": "expense",
+            "description": "Compra avulsa",
+            "amount": 10.0,
+            "date": "2026-08-05",
+        },
+        headers=headers,
+    ).get_json()["data"]
+    client.post(f"/api/v1/invoices/{august_purchase['invoice_id']}/close", headers=headers)
+
+    broken_sub = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Netflix",
+            "type": "expense",
+            "amount": 39.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",  # 1ª ocorrência ok (jul), 2ª trava (ago fechada)
+        },
+        headers=headers,
+    ).get_json()["data"]
+
+    # Cartão diferente, sem nenhuma fatura fechada — essa assinatura deve
+    # gerar normalmente mesmo com a outra travando.
+    other_card_id = _create_card(client, headers, closing_day=10, due_day=20)
+    client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": other_card_id,
+            "description": "Spotify",
+            "type": "expense",
+            "amount": 19.9,
+            "frequency": "monthly",
+            "day_of_month": 5,
+            "start_date": "2026-07-05",
+        },
+        headers=headers,
+    )
+
+    user_id = client.get("/api/v1/auth/me", headers=headers).get_json()["data"]["id"]
+    result = recurring_transaction_service.generate_due_subscriptions(
+        user_id, until=date(2026, 9, 30)
+    )
+    assert result["generated_count"] == 3  # Spotify: julho, agosto, setembro
+    assert len(result["errors"]) == 1
+    assert result["errors"][0]["recurring_id"] == broken_sub["id"]
+
+    broken_after = client.get(
+        f"/api/v1/recurring-transactions/{broken_sub['id']}", headers=headers
+    ).get_json()["data"]
+    assert broken_after["last_generated"] is None  # nada avançou, nem a de julho
 
 
 def test_cannot_use_account_from_another_user(client, auth_headers):

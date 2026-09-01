@@ -8,7 +8,7 @@ from app.models.credit_card import CreditCard
 from app.models.recurring_transaction import RecurringTransaction
 from app.models.transaction import Transaction
 from app.services import invoice_service
-from app.services.exceptions import ConflictError, NotFoundError, ValidationError
+from app.services.exceptions import ConflictError, NotFoundError, ServiceError, ValidationError
 from app.utils.datetime_utils import add_months, clamped_date
 
 
@@ -218,3 +218,29 @@ def generate_due_transactions(
 
     db.session.commit()
     return generated
+
+
+def generate_due_subscriptions(user_id: int, until: date | None = None) -> dict:
+    """Gera automaticamente as ocorrências vencidas de toda assinatura ativa
+    (recurring com `credit_card_id`) até `until` (padrão: hoje). Pensado pra
+    ser chamado silenciosamente sempre que o app é aberto — por isso nunca
+    deixa uma assinatura com problema (ex.: fatura futura fechada na mão)
+    travar as demais, nem propaga erro pra quebrar a tela que disparou a
+    chamada; cada assinatura é isolada e os erros voltam num relatório."""
+    subscriptions = (
+        db.session.query(RecurringTransaction)
+        .filter_by(user_id=user_id, is_active=True)
+        .filter(RecurringTransaction.credit_card_id.isnot(None))
+        .all()
+    )
+
+    generated_count = 0
+    errors: list[dict] = []
+    for recurring in subscriptions:
+        try:
+            generated = generate_due_transactions(user_id, recurring.id, until=until)
+            generated_count += len(generated)
+        except ServiceError as exc:
+            errors.append({"recurring_id": recurring.id, "message": exc.message})
+
+    return {"generated_count": generated_count, "errors": errors}

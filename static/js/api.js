@@ -203,6 +203,7 @@ const Api = (() => {
         post(`/recurring-transactions/${id}/generate${until ? `?until=${until}` : ""}`).then(
           (r) => r
         ),
+      autoGenerate: () => post("/recurring-transactions/auto-generate").then((r) => r.data),
     },
 
     goals: {

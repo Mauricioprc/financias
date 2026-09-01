@@ -24,21 +24,25 @@ function mountCrudView(container, config) {
     removeItem,
     renderItem,
     extraRowActions,
+    extraHeaderActions,
     transformSubmit = (v) => v,
   } = config;
 
   async function refresh() {
     container.innerHTML = "";
+    const headerActions = [
+      createItem
+        ? UI.el(
+            "button",
+            { class: "btn btn--primary btn--sm", onclick: () => openCreateModal() },
+            "+ Novo"
+          )
+        : null,
+    ].concat(extraHeaderActions ? extraHeaderActions(refresh) : []);
     container.appendChild(
       UI.el("div", { class: "page-header" }, [
         UI.el("h1", { class: "page-title" }, title),
-        createItem
-          ? UI.el(
-              "button",
-              { class: "btn btn--primary btn--sm", onclick: () => openCreateModal() },
-              "+ Novo"
-            )
-          : null,
+        UI.el("div", { class: "page-header__actions" }, headerActions),
       ])
     );
 

@@ -70,6 +70,16 @@ def delete_recurring_transaction_route(user_id, recurring_id):
     return "", 204
 
 
+@bp.route("/auto-generate", methods=["POST"])
+@require_user
+def auto_generate_subscriptions_route(user_id):
+    """Chamado silenciosamente pelo frontend ao abrir o app — gera as
+    assinaturas (recurring com cartão) vencidas até hoje, sem expor `until`
+    (essa rota nunca deve gerar pra frente, só o que já venceu)."""
+    result = recurring_transaction_service.generate_due_subscriptions(user_id)
+    return jsonify({"data": result, "meta": {}})
+
+
 @bp.route("/<int:recurring_id>/generate", methods=["POST"])
 @require_user
 @validate_query(generate_query_schema)

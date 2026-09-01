@@ -13,6 +13,11 @@ async function renderHomeView(container) {
     return;
   }
 
+  // Mesmo gatilho silencioso de recurring.js — a Home é a tela que abre
+  // primeiro, então é aqui que a maioria das assinaturas vencidas hoje vai
+  // ser lançada na prática. Nunca gera pra frente (rota sem `until`).
+  Api.recurring.autoGenerate().catch(() => {});
+
   let balanceChart = null;
   let categoryChart = null;
 
