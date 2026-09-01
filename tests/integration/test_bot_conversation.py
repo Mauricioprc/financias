@@ -471,3 +471,59 @@ def test_invalid_credit_card_reprompts_same_step(client, auth_headers, fake_what
     state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
     assert state.step == "awaiting_credit_card"
     assert "inválido" in fake_whatsapp[-1]["args"][0]
+
+
+def test_message_is_marked_processed_before_handler_side_effect_runs(
+    client, auth_headers, fake_whatsapp, monkeypatch
+):
+    """Prova a mudança de ordem em `_handle_event` (idempotência ANTES do
+    efeito colateral, ver ARCHITECTURE.md > Riscos conhecidos): se o
+    handler quebrar no meio do processamento (ex.: processo caiu), a
+    mensagem já está marcada como processada — uma reentrega da Meta não
+    tenta rodar o handler de novo (o que poderia duplicar a Transaction se
+    a quebra tivesse acontecido depois de já ter comitado o lançamento)."""
+    user, headers = _register_and_link(client, auth_headers)
+    acc = client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta Teste", "type": "checking", "initial_balance": 100},
+        headers=headers,
+    ).get_json()["data"]
+    cat = client.post(
+        "/api/v1/categories", json={"name": "Mercado", "type": "expense"}, headers=headers
+    ).get_json()["data"]
+
+    phone = user.phone_number
+    steps = [
+        _text_event(phone, "1", "m0"),
+        _reply_event(phone, "expense", "m1"),
+        _text_event(phone, "50,00", "m2"),
+        _reply_event(phone, str(cat["id"]), "m3"),
+        _reply_event(phone, str(acc["id"]), "m4"),
+        _text_event(phone, "Compras da semana", "m5"),
+    ]
+    for event in steps:
+        conversation._handle_event(event)
+
+    confirm_event = _reply_event(phone, "confirm", "m6")
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("processo caiu no meio do efeito colateral")
+
+    # Simula a quebra depois do commit de mark_processed, mas antes do
+    # handler terminar de criar a Transaction.
+    monkeypatch.setattr(
+        conversation, "_handle_flow_step", lambda *a, **k: _boom()
+    )
+
+    with pytest.raises(RuntimeError):
+        conversation._handle_event(confirm_event)
+
+    assert conversation.already_processed("m6") is True
+    assert db.session.query(Transaction).filter_by(user_id=user.id).first() is None
+
+    # Reentrega da Meta pra mesma mensagem: já está marcada como
+    # processada, então o handler (que criaria a Transaction) não roda de
+    # novo — mensagem "engolida" em vez de lançamento duplicado.
+    monkeypatch.undo()
+    conversation._handle_event(confirm_event)
+    assert db.session.query(Transaction).filter_by(user_id=user.id).count() == 0

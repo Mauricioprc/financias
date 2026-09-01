@@ -147,6 +147,27 @@ def _handle_event(event: dict) -> None:
         logger.info("Mensagem %s já processada, ignorando (reentrega).", message_id)
         return
 
+    # Marca como processado ANTES de disparar qualquer efeito colateral do
+    # handler (ex.: _handle_flow_step pode criar uma Transaction). O commit
+    # de mark_processed() e o(s) commit(s) que o handler abaixo vai fazer
+    # continuam sendo transações separadas — não dá pra unificar num único
+    # commit atômico sem reestruturar todos os handlers de fluxo pra
+    # receberem/devolverem uma sessão aberta (eles hoje comitam internamente
+    # via chamadas a services como transaction_service.create_transaction) —
+    # ver ARCHITECTURE.md, seção "Riscos conhecidos", pro racional completo
+    # e a solução futura.
+    #
+    # Trade-off deliberado: se o processo cair exatamente entre esse commit
+    # e o handler terminar, a mensagem fica marcada como processada mas o
+    # efeito nunca aconteceu — o usuário precisa reenviar (mensagem
+    # "engolida"). Isso é preferível a marcar DEPOIS do efeito: nesse caso,
+    # uma queda nessa mesma janela faria a Meta reentregar a mensagem, o
+    # handler rodaria de novo (já_processed ainda False) e duplicaria o
+    # lançamento financeiro. Preferimos processar zero vezes a processar
+    # duas vezes quando dinheiro está em jogo.
+    if message_id:
+        mark_processed(message_id)
+
     user = auth.resolve_user_by_phone(event["wa_id"])
     if user is None:
         whatsapp_client.send_text(
@@ -154,8 +175,6 @@ def _handle_event(event: dict) -> None:
             "Esse número ainda não está vinculado a uma conta MR Gestão. "
             "Acesse o dashboard, vá em Perfil e cadastre este número.",
         )
-        if message_id:
-            mark_processed(message_id)
         return
 
     text_normalized = (event.get("text") or "").strip().lower()
@@ -163,8 +182,6 @@ def _handle_event(event: dict) -> None:
     if text_normalized in EXIT_KEYWORDS:
         clear_state(user.id)
         send_root_menu(user)
-        if message_id:
-            mark_processed(message_id)
         return
 
     state = get_state(user.id)
@@ -173,9 +190,6 @@ def _handle_event(event: dict) -> None:
         _handle_root_selection(user, event)
     else:
         _handle_flow_step(user, state, event)
-
-    if message_id:
-        mark_processed(message_id)
 
 
 def _handle_root_selection(user, event: dict) -> None:

@@ -612,6 +612,35 @@ Se no futuro a allowlist bloquear algo necessário, as opções são: upgrade
 para o plano pago do PythonAnywhere (remove a restrição de rede) ou migrar a
 hospedagem — nenhuma decisão precisa ser tomada agora.
 
+### Idempotência do webhook do bot não é atômica com o efeito do handler
+
+`bot/conversation.py::_handle_event` marca a mensagem como processada
+(`BotProcessedMessage`, commit próprio) **antes** de chamar o handler do
+fluxo ativo, que pode ter efeitos colaterais financeiros (ex.: criar uma
+`Transaction` via `transaction_service.create_transaction`, que também
+comita por conta própria). São dois commits separados, não uma transação
+atômica única — não dá pra unificar sem reestruturar todos os módulos em
+`bot/handlers/` para devolverem os efeitos pendentes numa sessão comum em
+vez de comitarem internamente via chamadas de service.
+
+Trade-off aceito deliberadamente: se o processo cair entre o commit de
+`mark_processed()` e o handler terminar, a mensagem fica marcada como
+processada mas o efeito nunca aconteceu — o usuário precisa reenviar (a
+mensagem é "engolida"). A alternativa (marcar depois do efeito, como era
+antes) troca esse risco por um pior: uma queda na mesma janela faz a Meta
+reentregar a mensagem, o handler roda de novo e duplica o lançamento
+financeiro. Preferimos falhar processando zero vezes a arriscar processar
+duas vezes quando dinheiro está em jogo.
+
+Solução futura, se a taxa de "mensagens engolidas" se mostrar um problema
+na prática: mover o processamento do webhook pra uma fila (ex.: RQ, Celery
+com Redis como broker — ambos cabem no free tier do PythonAnywhere para
+volume pessoal) com entrega **at-least-once** e deduplicação feita na
+aplicação (chave = `message_id`, como hoje), não no banco — a fila garante
+retry automático se o worker cair no meio do processamento, sem depender
+de a Meta reentregar. O webhook em si viraria só "enfileira e responde
+200 rápido", tirando a lógica de negócio do caminho crítico do request.
+
 ---
 
 **Próximo passo:** aguardar aprovação para iniciar a Fase 1 (autenticação +
