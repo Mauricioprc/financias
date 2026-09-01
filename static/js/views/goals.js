@@ -23,17 +23,40 @@ function renderGoalsView(container) {
         options: Object.entries(GOAL_STATUS_LABELS).map(([value, label]) => ({ value, label })),
       },
     ],
-    loadItems: () => Api.goals.list(),
+    loadItems: async () => {
+      const goals = await Api.goals.list();
+      const projections = await Promise.all(
+        goals.map((g) =>
+          g.status === "in_progress" ? Api.insights.goalProjection(g.id).catch(() => null) : null
+        )
+      );
+      return goals.map((g, i) => ({ ...g, projection: projections[i] }));
+    },
     createItem: (data) => Api.goals.create(data),
     updateItem: (id, data) => Api.goals.update(id, data),
     removeItem: (id) => Api.goals.remove(id),
     renderItem: (g) => {
       const pct = Math.min(100, Math.round((Number(g.current_amount) / Number(g.target_amount)) * 100));
+      const subtitleParts = [
+        `${UI.money(g.current_amount)} de ${UI.money(g.target_amount)} (${pct}%)`,
+        GOAL_STATUS_LABELS[g.status],
+      ];
+
+      const titleChildren = [g.name];
+      const projection = g.projection;
+      if (projection && projection.projected_completion_date) {
+        const [year, month] = projection.projected_completion_date.split("-");
+        subtitleParts.push(`previsão: ${month}/${year} (estimativa)`);
+        // Mesmo padrão de badge de alerta usado na Home (anomalias de
+        // categoria) — vermelho quando a projeção passa da data alvo.
+        if (projection.on_track === false) {
+          titleChildren.push(" ", UI.el("span", { class: "badge badge--expense" }, "Fora do prazo"));
+        }
+      }
+
       return {
-        title: g.name,
-        subtitle: `${UI.money(g.current_amount)} de ${UI.money(g.target_amount)} (${pct}%) · ${
-          GOAL_STATUS_LABELS[g.status]
-        }`,
+        title: titleChildren,
+        subtitle: subtitleParts.join(" · "),
         value: null,
         progress: g.status === "in_progress" ? { pct } : null,
       };

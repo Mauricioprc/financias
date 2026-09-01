@@ -224,6 +224,13 @@ const Api = (() => {
       remove: (id) => del(`/investments/${id}`),
     },
 
+    insights: {
+      summary: () => get("/insights/summary").then((r) => r.data),
+      goalProjection: (goalId) => get(`/insights/goal-projection/${goalId}`).then((r) => r.data),
+      balanceForecast: (accountId) =>
+        get(`/insights/balance-forecast/${accountId}`).then((r) => r.data),
+    },
+
     reports: {
       balanceHistory: (days) => get("/reports/balance-history", { days }).then((r) => r.data),
       categoryBreakdown: (month, type) =>

@@ -9,8 +9,15 @@ async function renderReportsView(container) {
 
   let creditCards;
   let goals;
+  let insightsSummary;
   try {
-    [creditCards, goals] = await Promise.all([Api.creditCards.list(), Api.goals.list()]);
+    [creditCards, goals, insightsSummary] = await Promise.all([
+      Api.creditCards.list(),
+      Api.goals.list(),
+      // Enriquecimento, não crítico — sem isso a tela segue funcionando,
+      // só sem a seção de comparação por categoria.
+      Api.insights.summary().catch(() => null),
+    ]);
   } catch (err) {
     container.innerHTML = "";
     UI.showApiError(err);
@@ -221,6 +228,53 @@ async function renderReportsView(container) {
       );
     });
   }
+
+  /* Comparação de gastos por categoria (mês corrente x mesmo recorte de dia
+     do mês anterior x média trailing de 3 meses) — GET /insights/summary. */
+  const categoryComparison = insightsSummary ? insightsSummary.category_comparison : [];
+  container.appendChild(
+    UI.el("div", { class: "section-title" }, "Comparação de gastos por categoria")
+  );
+  if (categoryComparison.length === 0) {
+    container.appendChild(
+      UI.el("div", { class: "empty-state" }, [
+        UI.el("div", { class: "empty-state__icon" }, UI.icon("bar-chart-3")),
+        UI.el("div", {}, "Sem dado suficiente pra comparar categorias ainda."),
+      ])
+    );
+  } else {
+    const comparisonList = UI.el("div", { class: "list" });
+    categoryComparison.forEach((item) => comparisonList.appendChild(categoryComparisonRow(item)));
+    container.appendChild(comparisonList);
+  }
+}
+
+/* Despesas: variação negativa (gastou menos que a média) é boa (verde);
+   positiva (gastou mais) é ruim (vermelho) — mesmas classes já usadas em
+   valores de receita/despesa no resto do app. */
+function categoryComparisonRow(item) {
+  const pct = item.pct_change_vs_avg;
+  let pctLabel;
+  let pctClass = "";
+  if (pct === null || pct === undefined) {
+    pctLabel = "sem histórico";
+  } else {
+    const rounded = Math.round(Number(pct));
+    pctLabel = (rounded > 0 ? "+" : "") + rounded + "%";
+    pctClass = rounded > 0 ? "value--negative" : rounded < 0 ? "value--positive" : "";
+  }
+
+  return UI.el("div", { class: "list-item" }, [
+    UI.el("div", { class: "list-item__main" }, [
+      UI.el("div", { class: "list-item__title" }, item.category_name),
+      UI.el(
+        "div",
+        { class: "list-item__subtitle" },
+        `${UI.money(item.current_month_total)} este mês`
+      ),
+    ]),
+    UI.el("div", { class: `list-item__value ${pctClass}` }, pctLabel),
+  ]);
 }
 
 Router.register("/reports", renderReportsView);

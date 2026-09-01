@@ -25,17 +25,29 @@ async function renderHomeView(container) {
     let accounts;
     let txResp;
     let goals;
+    let insightsSummary;
     try {
-      [accounts, txResp, goals] = await Promise.all([
+      [accounts, txResp, goals, insightsSummary] = await Promise.all([
         Api.accounts.list(),
         Api.transactions.list({ per_page: 5 }),
         Api.goals.list(),
+        // Enriquecimento, não crítico — se falhar, o resto da Home continua normal.
+        Api.insights.summary().catch(() => null),
       ]);
     } catch (err) {
       container.innerHTML = "";
       UI.showApiError(err);
       return;
     }
+
+    const anomalies = insightsSummary ? insightsSummary.spending_anomalies : [];
+    const invoiceTrends = insightsSummary ? insightsSummary.invoice_trends : [];
+    const forecastByAccountId = Object.fromEntries(
+      (insightsSummary ? insightsSummary.balance_forecasts : []).map((f) => [
+        String(f.account_id),
+        f,
+      ])
+    );
 
     if (balanceChart) balanceChart.destroy();
     if (categoryChart) categoryChart.destroy();
@@ -53,6 +65,14 @@ async function renderHomeView(container) {
         ),
       ])
     );
+
+    if (anomalies.length > 0 || invoiceTrends.length > 0) {
+      container.appendChild(UI.el("div", { class: "section-title" }, "Alertas"));
+      const alertsList = UI.el("div", { class: "list" });
+      anomalies.forEach((a) => alertsList.appendChild(anomalyRow(a)));
+      invoiceTrends.forEach((t) => alertsList.appendChild(invoiceTrendRow(t)));
+      container.appendChild(alertsList);
+    }
 
     container.appendChild(
       UI.el("div", { class: "tiles" }, [
@@ -83,12 +103,30 @@ async function renderHomeView(container) {
     } else {
       const list = UI.el("div", { class: "list" });
       accounts.slice(0, 4).forEach((a) => {
+        const mainChildren = [
+          UI.el("div", { class: "list-item__title" }, a.name),
+          UI.el("div", { class: "list-item__subtitle" }, a.type),
+        ];
+
+        const forecast = forecastByAccountId[String(a.id)];
+        if (forecast && forecast.days_remaining > 0) {
+          const diff =
+            Number(forecast.projected_end_of_month_balance) - Number(forecast.current_balance);
+          // Diferença irrelevante (< R$1) não precisa poluir a lista.
+          if (Math.abs(diff) >= 1) {
+            mainChildren.push(
+              UI.el(
+                "div",
+                { class: "list-item__subtitle" },
+                `projeção fim do mês: ${UI.money(forecast.projected_end_of_month_balance)}`
+              )
+            );
+          }
+        }
+
         list.appendChild(
           UI.el("div", { class: "list-item" }, [
-            UI.el("div", { class: "list-item__main" }, [
-              UI.el("div", { class: "list-item__title" }, a.name),
-              UI.el("div", { class: "list-item__subtitle" }, a.type),
-            ]),
+            UI.el("div", { class: "list-item__main" }, mainChildren),
             UI.el(
               "div",
               {
@@ -244,6 +282,48 @@ function emptyState(icon, text) {
     UI.el("div", { class: "empty-state__icon" }, icon),
     UI.el("div", {}, text),
   ]);
+}
+
+/* Badge de severidade reaproveitando as cores já existentes pra
+   expense/in_progress (vermelho/amarelo) — mesmo padrão de badge usado em
+   invoices.js/goals.js, sem componente novo. */
+function anomalyRow(a) {
+  const badgeClass = a.severity === "alta" ? "badge--expense" : "badge--in_progress";
+  const badgeLabel = a.severity === "alta" ? "Alta" : "Moderada";
+  return UI.el("div", { class: "list-item" }, [
+    UI.el("div", { class: "list-item__main" }, [
+      UI.el("div", { class: "list-item__title" }, [
+        a.category_name + " ",
+        UI.el("span", { class: `badge ${badgeClass}` }, badgeLabel),
+      ]),
+      UI.el(
+        "div",
+        { class: "list-item__subtitle" },
+        `Projeção: ${UI.money(a.projected_month_total)} · ${Math.round(Number(a.pct_above_avg))}% acima da média`
+      ),
+    ]),
+  ]);
+}
+
+function invoiceTrendRow(t) {
+  return UI.el(
+    "div",
+    {
+      class: "list-item list-item--clickable",
+      onclick: () => Router.navigate(`/credit-cards/${t.card_id}/invoices`),
+    },
+    [
+      UI.el("div", { class: "list-item__main" }, [
+        UI.el("div", { class: "list-item__title" }, t.card_name),
+        UI.el(
+          "div",
+          { class: "list-item__subtitle" },
+          `Fatura projetada: ${UI.money(t.projected_total)} · ` +
+            `${Math.round(Number(t.pct_above_average))}% acima da média de ${UI.money(t.avg_of_last_3)}`
+        ),
+      ]),
+    ]
+  );
 }
 
 function transactionRow(t) {
