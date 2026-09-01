@@ -729,6 +729,17 @@ a {
   margin: 0;
 }
 
+.inline-add-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.inline-add-group input {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- Auth pages ---------- */
 
 .auth-screen {

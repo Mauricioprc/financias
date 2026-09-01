@@ -164,6 +164,8 @@ const Api = (() => {
       list: (query) => get("/transactions", query).then((r) => r),
       get: (id) => get(`/transactions/${id}`).then((r) => r.data),
       create: (data) => post("/transactions", data).then((r) => r.data),
+      createInstallmentPurchase: (data) =>
+        post("/transactions/installment-purchases", data).then((r) => r.data),
       update: (id, data) => patch(`/transactions/${id}`, data).then((r) => r.data),
       remove: (id) => del(`/transactions/${id}`),
     },
@@ -182,6 +184,8 @@ const Api = (() => {
       close: (id) => post(`/invoices/${id}/close`).then((r) => r.data),
       pay: (id, accountId) =>
         post(`/invoices/${id}/pay`, { account_id: accountId }).then((r) => r.data),
+      registerPayment: (id, accountId, amount) =>
+        post(`/invoices/${id}/payments`, { account_id: accountId, amount }).then((r) => r.data),
     },
 
     transfers: {

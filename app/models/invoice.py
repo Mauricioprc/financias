@@ -26,5 +26,6 @@ class Invoice(db.Model, TimestampMixin):
     closing_date: Mapped[date_] = mapped_column(Date, nullable=False)
     due_date: Mapped[date_] = mapped_column(Date, nullable=False)
     total_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
+    paid_amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

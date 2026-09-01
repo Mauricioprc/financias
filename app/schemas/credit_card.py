@@ -6,6 +6,7 @@ class CreditCardCreateSchema(Schema):
     bank_name = fields.String(
         required=False, load_default=None, allow_none=True, validate=validate.Length(max=60)
     )
+    account_id = fields.Integer(required=False, load_default=None, allow_none=True)
     credit_limit = fields.Decimal(required=True, as_string=False, validate=validate.Range(min=0.01))
     closing_day = fields.Integer(required=True, validate=validate.Range(min=1, max=31))
     due_day = fields.Integer(required=True, validate=validate.Range(min=1, max=31))
@@ -14,6 +15,7 @@ class CreditCardCreateSchema(Schema):
 class CreditCardUpdateSchema(Schema):
     name = fields.String(required=False, validate=validate.Length(min=1, max=100))
     bank_name = fields.String(required=False, allow_none=True, validate=validate.Length(max=60))
+    account_id = fields.Integer(required=False, allow_none=True)
     credit_limit = fields.Decimal(
         required=False, as_string=False, validate=validate.Range(min=0.01)
     )
@@ -24,6 +26,7 @@ class CreditCardUpdateSchema(Schema):
 
 class CreditCardOutSchema(Schema):
     id = fields.Integer()
+    account_id = fields.Integer(allow_none=True)
     name = fields.String()
     bank_name = fields.String(allow_none=True)
     credit_limit = fields.Decimal(as_string=True)

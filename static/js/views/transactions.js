@@ -1,18 +1,41 @@
 /* Receitas e despesas — filtros, paginação, criação, edição e exclusão. */
 
+const NEW_CATEGORY_OPTION_VALUE = "__new__";
+
 function categoryOptionsForType(categories, type) {
   return [{ value: "", label: "(sem categoria)" }].concat(
     categories.filter((c) => c.type === type).map((c) => ({ value: c.id, label: c.name }))
   );
 }
 
+/* Mesmas opções, com "+ Nova categoria" no fim — só pra formulários que
+   sabem tratar essa opção (ver openCreateTransactionModal). O modal de
+   edição usa categoryOptionsForType puro, sem essa opção. */
+function categoryOptionsWithAdd(categories, type) {
+  return categoryOptionsForType(categories, type).concat([
+    { value: NEW_CATEGORY_OPTION_VALUE, label: "+ Nova categoria" },
+  ]);
+}
+
 /* Modal de criação de transação, reaproveitado pela tela de Transações e pelo
    botão de lançamento rápido da Home. `onCreated` roda após salvar com sucesso. */
 function openCreateTransactionModal(accounts, categories, creditCards, onCreated) {
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
-  const creditCardOptions = [{ value: "", label: "(não é no cartão)" }].concat(
-    creditCards.map((c) => ({ value: c.id, label: c.name }))
-  );
+
+  // Cartões vinculados àquela conta (Cartões > Conta vinculada) aparecem
+  // sozinhos no dropdown; se sobrar só 1, ele já vem pré-selecionado. Sem
+  // nenhum cartão vinculado a essa conta, cai de volta pra lista completa —
+  // não trava quem ainda não configurou o vínculo.
+  function creditCardOptionsForAccount(accountId) {
+    const linked = creditCards.filter((c) => c.account_id && String(c.account_id) === String(accountId));
+    const list = linked.length > 0 ? linked : creditCards;
+    return {
+      options: [{ value: "", label: "(não é no cartão)" }].concat(
+        list.map((c) => ({ value: c.id, label: c.name }))
+      ),
+      autoSelectId: linked.length === 1 ? linked[0].id : "",
+    };
+  }
 
   const fields = [
     {
@@ -30,13 +53,14 @@ function openCreateTransactionModal(accounts, categories, creditCards, onCreated
       name: "credit_card_id",
       label: "Cartão de crédito (opcional)",
       type: "select",
-      options: creditCardOptions,
+      options: creditCardOptionsForAccount(accounts[0] ? accounts[0].id : "").options,
     },
+    { name: "installments", label: "Parcelas", type: "number", min: 1, max: 24 },
     {
       name: "category_id",
       label: "Categoria",
       type: "select",
-      options: categoryOptionsForType(categories, "expense"),
+      options: categoryOptionsWithAdd(categories, "expense"),
     },
     { name: "description", label: "Descrição", required: true },
     { name: "amount", label: "Valor (R$)", type: "number", step: "0.01", required: true },
@@ -45,7 +69,7 @@ function openCreateTransactionModal(accounts, categories, creditCards, onCreated
     { name: "notes", label: "Notas (opcional)", type: "textarea" },
   ];
 
-  const form = UI.buildForm(fields, { date: UI.todayISO(), is_paid: true });
+  const form = UI.buildForm(fields, { date: UI.todayISO(), is_paid: true, installments: 1 });
   const errorBox = UI.el("div", { class: "form-error", style: "display:none" });
   form.appendChild(errorBox);
   form.appendChild(
@@ -60,27 +84,157 @@ function openCreateTransactionModal(accounts, categories, creditCards, onCreated
   );
 
   const typeSelect = UI.qs('select[name="type"]', form);
+  const accountSelect = UI.qs('select[name="account_id"]', form);
+  const creditCardSelect = UI.qs('select[name="credit_card_id"]', form);
+  const installmentsInput = UI.qs('input[name="installments"]', form);
+  const installmentsWrap = installmentsInput.parentElement;
   const categorySelect = UI.qs('select[name="category_id"]', form);
-  typeSelect.addEventListener("change", () => {
-    categorySelect.innerHTML = "";
-    categoryOptionsForType(categories, typeSelect.value).forEach((opt) => {
-      categorySelect.appendChild(UI.el("option", { value: opt.value }, opt.label));
+
+  // "Parcelas" só faz sentido com um cartão selecionado — sem cartão, fica
+  // escondido e travado em 1 (compra parcelada exige credit_card_id).
+  function updateInstallmentsVisibility() {
+    const hasCard = Boolean(creditCardSelect.value);
+    installmentsWrap.style.display = hasCard ? "" : "none";
+    if (!hasCard) installmentsInput.value = "1";
+  }
+
+  function fillCreditCardSelect(accountId) {
+    const { options, autoSelectId } = creditCardOptionsForAccount(accountId);
+    creditCardSelect.innerHTML = "";
+    options.forEach((opt) => {
+      creditCardSelect.appendChild(
+        UI.el(
+          "option",
+          { value: opt.value, selected: String(opt.value) === String(autoSelectId) },
+          opt.label
+        )
+      );
     });
+    updateInstallmentsVisibility();
+  }
+
+  creditCardSelect.addEventListener("change", updateInstallmentsVisibility);
+  accountSelect.addEventListener("change", () => fillCreditCardSelect(accountSelect.value));
+  fillCreditCardSelect(accountSelect.value); // aplica o auto-select já na abertura do modal
+
+  function fillCategorySelect(selectedValue = "") {
+    categorySelect.innerHTML = "";
+    categoryOptionsWithAdd(categories, typeSelect.value).forEach((opt) => {
+      categorySelect.appendChild(
+        UI.el(
+          "option",
+          { value: opt.value, selected: String(opt.value) === String(selectedValue) },
+          opt.label
+        )
+      );
+    });
+  }
+
+  typeSelect.addEventListener("change", () => fillCategorySelect());
+
+  // "+ Nova categoria" — cria inline, sem sair do formulário nem abrir outra
+  // tela: troca o <select> por um campo de texto na hora, no lugar dele.
+  const newCategoryInput = UI.el("input", {
+    type: "text",
+    placeholder: "Nome da nova categoria",
+    style: "display:none",
   });
+  const newCategoryGroup = UI.el("div", { class: "inline-add-group", style: "display:none" }, [
+    newCategoryInput,
+    UI.el(
+      "button",
+      { type: "button", class: "btn btn--primary btn--sm", onclick: confirmNewCategory },
+      "Adicionar"
+    ),
+    UI.el(
+      "button",
+      { type: "button", class: "btn btn--secondary btn--sm", onclick: cancelNewCategory },
+      "Cancelar"
+    ),
+  ]);
+  categorySelect.insertAdjacentElement("afterend", newCategoryGroup);
+
+  categorySelect.addEventListener("change", () => {
+    if (categorySelect.value !== NEW_CATEGORY_OPTION_VALUE) return;
+    categorySelect.style.display = "none";
+    newCategoryGroup.style.display = "flex";
+    newCategoryInput.style.display = "";
+    newCategoryInput.value = "";
+    newCategoryInput.focus();
+  });
+
+  newCategoryInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      confirmNewCategory();
+    }
+  });
+
+  function showCategorySelect() {
+    newCategoryGroup.style.display = "none";
+    categorySelect.style.display = "";
+  }
+
+  function cancelNewCategory() {
+    fillCategorySelect("");
+    showCategorySelect();
+  }
+
+  async function confirmNewCategory() {
+    const name = newCategoryInput.value.trim();
+    if (!name) {
+      newCategoryInput.focus();
+      return;
+    }
+    try {
+      const created = await Api.categories.create({ name, type: typeSelect.value });
+      categories.push(created);
+      fillCategorySelect(created.id);
+      showCategorySelect();
+    } catch (err) {
+      errorBox.textContent = err.message;
+      errorBox.style.display = "block";
+    }
+  }
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    // Se o usuário abriu "+ Nova categoria" e submeteu sem confirmar nem
+    // cancelar, o select ainda está em "__new__" (mas escondido) — trata
+    // como "sem categoria" em vez de mandar esse valor pra API.
+    if (categorySelect.value === NEW_CATEGORY_OPTION_VALUE) {
+      cancelNewCategory();
+    }
     const values = UI.formValues(form, fields);
-    const data = {
-      ...values,
-      account_id: Number(values.account_id),
-      credit_card_id: values.credit_card_id ? Number(values.credit_card_id) : null,
-      category_id: values.category_id ? Number(values.category_id) : null,
-    };
+    const creditCardId = values.credit_card_id ? Number(values.credit_card_id) : null;
+    const categoryId = values.category_id ? Number(values.category_id) : null;
+    const installments = Number(values.installments) || 1;
+
     try {
-      await Api.transactions.create(data);
+      if (creditCardId && installments > 1) {
+        await Api.transactions.createInstallmentPurchase({
+          account_id: Number(values.account_id),
+          credit_card_id: creditCardId,
+          category_id: categoryId,
+          description: values.description,
+          total_amount: values.amount,
+          installments,
+          date: values.date,
+          notes: values.notes,
+        });
+        UI.toast(`Compra parcelada em ${installments}x criada.`, "success");
+      } else {
+        const data = {
+          ...values,
+          account_id: Number(values.account_id),
+          credit_card_id: creditCardId,
+          category_id: categoryId,
+        };
+        delete data.installments; // não faz parte de TransactionCreateSchema
+        await Api.transactions.create(data);
+        UI.toast("Transação criada.", "success");
+      }
       UI.closeModal();
-      UI.toast("Transação criada.", "success");
       if (onCreated) onCreated();
     } catch (err) {
       errorBox.textContent = err.message;
@@ -111,7 +265,10 @@ async function renderTransactionsView(container) {
   container.innerHTML = "";
 
   const accountNameById = Object.fromEntries(accounts.map((a) => [String(a.id), a.name]));
-  const categoryNameById = Object.fromEntries(categories.map((c) => [String(c.id), c.name]));
+  // Função (não objeto fixo) porque `categories` pode ganhar itens depois —
+  // ver "+ Nova categoria" em openCreateTransactionModal, que empurra pro
+  // mesmo array recebido aqui por referência.
+  const categoryName = (id) => categories.find((c) => String(c.id) === String(id))?.name || "";
 
   const state = {
     type: "",
@@ -253,8 +410,12 @@ async function renderTransactionsView(container) {
     const subtitleParts = [
       UI.dateBR(t.date),
       accountNameById[String(t.account_id)] || "",
-      t.category_id ? categoryNameById[String(t.category_id)] || "" : null,
-      t.credit_card_id ? "no cartão" : null,
+      t.category_id ? categoryName(t.category_id) : null,
+      t.credit_card_id
+        ? t.installment_total > 1
+          ? `no cartão (${t.installment_number}/${t.installment_total})`
+          : "no cartão"
+        : null,
       t.is_paid ? null : "pendente",
     ].filter(Boolean);
 

@@ -30,6 +30,7 @@ def create_credit_card_route(payload, user_id):
         user_id=user_id,
         name=payload["name"],
         bank_name=payload["bank_name"],
+        account_id=payload["account_id"],
         credit_limit=payload["credit_limit"],
         closing_day=payload["closing_day"],
         due_day=payload["due_day"],

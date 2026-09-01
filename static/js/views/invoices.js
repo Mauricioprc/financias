@@ -1,4 +1,5 @@
-/* Faturas de um cartão específico — fechar e pagar. */
+/* Faturas de um cartão específico — fechar, pagar (integral) e registrar
+   pagamentos parciais mesmo com a fatura ainda aberta. */
 
 const INVOICE_STATUS_LABELS = { open: "Aberta", closed: "Fechada", paid: "Paga" };
 
@@ -50,6 +51,7 @@ async function renderInvoicesView(container, params) {
 
     const list = UI.el("div", { class: "list" });
     invoices.forEach((inv) => {
+      const remaining = Number(inv.total_amount) - Number(inv.paid_amount);
       const actions = UI.el("div", { class: "list-item__actions" });
 
       if (inv.status === "open") {
@@ -64,9 +66,27 @@ async function renderInvoicesView(container, params) {
         actions.appendChild(
           UI.el(
             "button",
-            { class: "btn btn--primary btn--sm", onclick: () => handlePay(inv) },
-            "Pagar"
+            { class: "btn btn--primary btn--sm", onclick: () => handlePayInFull(inv) },
+            "Pagar tudo"
           )
+        );
+      }
+
+      if (inv.status !== "paid" && remaining > 0) {
+        actions.appendChild(
+          UI.el(
+            "button",
+            { class: "btn btn--secondary btn--sm", onclick: () => handleRegisterPayment(inv) },
+            "Registrar pagamento"
+          )
+        );
+      }
+
+      const subtitleParts = [`Fecha ${UI.dateBR(inv.closing_date)} · vence ${UI.dateBR(inv.due_date)}`];
+      if (Number(inv.paid_amount) > 0) {
+        subtitleParts.push(
+          `Pago: ${UI.money(inv.paid_amount)} de ${UI.money(inv.total_amount)}` +
+            (remaining > 0 ? ` (restam ${UI.money(remaining)})` : "")
         );
       }
 
@@ -81,11 +101,7 @@ async function renderInvoicesView(container, params) {
                 INVOICE_STATUS_LABELS[inv.status]
               ),
             ]),
-            UI.el(
-              "div",
-              { class: "list-item__subtitle" },
-              `Fecha ${UI.dateBR(inv.closing_date)} · vence ${UI.dateBR(inv.due_date)}`
-            ),
+            UI.el("div", { class: "list-item__subtitle" }, subtitleParts.join(" · ")),
           ]),
           UI.el("div", { class: "list-item__value" }, UI.money(inv.total_amount)),
           actions.childNodes.length ? actions : null,
@@ -107,7 +123,7 @@ async function renderInvoicesView(container, params) {
     }
   }
 
-  async function handlePay(invoice) {
+  async function handlePayInFull(invoice) {
     const accounts = await Api.accounts.list();
     if (accounts.length === 0) {
       UI.toast("Cadastre uma conta antes de pagar a fatura.", "error");
@@ -153,7 +169,68 @@ async function renderInvoicesView(container, params) {
       }
     });
 
-    UI.openModal(`Pagar fatura de ${UI.dateBR(invoice.reference_month)}`, form);
+    const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount);
+    UI.openModal(
+      `Pagar ${UI.money(remaining)} — fatura de ${UI.dateBR(invoice.reference_month)}`,
+      form
+    );
+  }
+
+  async function handleRegisterPayment(invoice) {
+    const accounts = await Api.accounts.list();
+    if (accounts.length === 0) {
+      UI.toast("Cadastre uma conta antes de registrar um pagamento.", "error");
+      return;
+    }
+
+    const remaining = Number(invoice.total_amount) - Number(invoice.paid_amount);
+    const fields = [
+      {
+        name: "account_id",
+        label: "Pagar com a conta",
+        type: "select",
+        required: true,
+        options: accounts.map((a) => ({ value: a.id, label: a.name })),
+      },
+      {
+        name: "amount",
+        label: `Valor (R$) — saldo devedor: ${UI.money(remaining)}`,
+        type: "number",
+        step: "0.01",
+        min: "0.01",
+        max: String(remaining),
+        required: true,
+      },
+    ];
+    const form = UI.buildForm(fields, {});
+    const errorBox = UI.el("div", { class: "form-error", style: "display:none" });
+    form.appendChild(errorBox);
+    form.appendChild(
+      UI.el("div", { class: "form-actions" }, [
+        UI.el(
+          "button",
+          { type: "button", class: "btn btn--secondary", onclick: () => UI.closeModal() },
+          "Cancelar"
+        ),
+        UI.el("button", { type: "submit", class: "btn btn--primary" }, "Registrar"),
+      ])
+    );
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const values = UI.formValues(form, fields);
+      try {
+        await Api.invoices.registerPayment(invoice.id, Number(values.account_id), values.amount);
+        UI.closeModal();
+        UI.toast("Pagamento registrado.", "success");
+        refresh();
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.style.display = "block";
+      }
+    });
+
+    UI.openModal(`Registrar pagamento — fatura de ${UI.dateBR(invoice.reference_month)}`, form);
   }
 
   draw();

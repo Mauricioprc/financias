@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify
 
 from app.api.decorators import require_user, validate_json, validate_query
 from app.schemas.transaction import (
+    InstallmentPurchaseCreateSchema,
     TransactionCreateSchema,
     TransactionListQuerySchema,
     TransactionOutSchema,
@@ -15,6 +16,7 @@ create_schema = TransactionCreateSchema()
 update_schema = TransactionUpdateSchema()
 out_schema = TransactionOutSchema()
 list_query_schema = TransactionListQuerySchema()
+installment_purchase_schema = InstallmentPurchaseCreateSchema()
 
 
 @bp.route("", methods=["GET"])
@@ -57,6 +59,24 @@ def create_transaction_route(payload, user_id):
         notes=payload["notes"],
     )
     return jsonify({"data": out_schema.dump(transaction), "meta": {}}), 201
+
+
+@bp.route("/installment-purchases", methods=["POST"])
+@require_user
+@validate_json(installment_purchase_schema)
+def create_installment_purchase_route(payload, user_id):
+    transactions = transaction_service.create_installment_purchase(
+        user_id=user_id,
+        account_id=payload["account_id"],
+        credit_card_id=payload["credit_card_id"],
+        category_id=payload["category_id"],
+        description=payload["description"],
+        total_amount=payload["total_amount"],
+        installments=payload["installments"],
+        date=payload["date"],
+        notes=payload["notes"],
+    )
+    return jsonify({"data": out_schema.dump(transactions, many=True), "meta": {}}), 201
 
 
 @bp.route("/<int:transaction_id>", methods=["GET"])

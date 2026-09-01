@@ -1,4 +1,3 @@
-import calendar
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -8,20 +7,11 @@ from app.models.category import Category
 from app.models.recurring_transaction import RecurringTransaction
 from app.models.transaction import Transaction
 from app.services.exceptions import ConflictError, NotFoundError, ValidationError
+from app.utils.datetime_utils import add_months, clamped_date
 
 
 def _signed_amount(type_: str, amount: Decimal) -> Decimal:
     return amount if type_ == "income" else -amount
-
-
-def _clamped_date(year: int, month: int, day: int) -> date:
-    last_day = calendar.monthrange(year, month)[1]
-    return date(year, month, min(day, last_day))
-
-
-def _add_months(year: int, month: int, months: int) -> tuple[int, int]:
-    total = (year * 12) + (month - 1) + months
-    return total // 12, (total % 12) + 1
 
 
 def _get_owned_account(user_id: int, account_id: int) -> Account:
@@ -48,13 +38,13 @@ def _next_occurrence(recurring: RecurringTransaction, after: date | None) -> dat
         return date.fromordinal(after.toordinal() + 7)
 
     if recurring.frequency == "monthly":
-        year, month = _add_months(after.year, after.month, 1)
+        year, month = add_months(after.year, after.month, 1)
         day = recurring.day_of_month or recurring.start_date.day
-        return _clamped_date(year, month, day)
+        return clamped_date(year, month, day)
 
     if recurring.frequency == "yearly":
         year = after.year + 1
-        return _clamped_date(year, recurring.start_date.month, recurring.start_date.day)
+        return clamped_date(year, recurring.start_date.month, recurring.start_date.day)
 
     raise ValidationError(f"Frequência desconhecida: {recurring.frequency}")
 

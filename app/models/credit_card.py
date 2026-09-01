@@ -16,6 +16,9 @@ class CreditCard(db.Model, TimestampMixin):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     bank_name: Mapped[str | None] = mapped_column(String(60), nullable=True)
     credit_limit: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)

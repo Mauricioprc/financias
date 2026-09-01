@@ -177,6 +177,116 @@ def test_close_and_pay_invoice_flow(client, auth_headers):
     assert resp.status_code == 409
 
 
+def test_partial_payment_on_open_invoice_reduces_balance_and_stays_open(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, initial_balance=1000.0)
+
+    resp = _buy(client, headers, account_id, card_id, 300.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    resp = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments",
+        json={"account_id": account_id, "amount": 100.0},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    invoice = resp.get_json()["data"]
+    assert invoice["status"] == "open"  # continua aceitando novas compras
+    assert invoice["total_amount"] == "300.00"
+    assert invoice["paid_amount"] == "100.00"
+
+    account = client.get(f"/api/v1/accounts/{account_id}", headers=headers).get_json()["data"]
+    assert account["current_balance"] == "900.00"
+
+    history = client.get("/api/v1/transactions?per_page=100", headers=headers).get_json()["data"]
+    payment_tx = [t for t in history if "Pagamento" in t["description"]]
+    assert len(payment_tx) == 1
+    assert payment_tx[0]["amount"] == "100.00"
+
+    # Uma nova compra ainda pode entrar na fatura (ela continua "open").
+    resp = _buy(client, headers, account_id, card_id, 50.0, "2026-07-10")
+    assert resp.status_code == 201
+    invoice = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).get_json()["data"]
+    assert invoice["total_amount"] == "350.00"
+
+
+def test_partial_payment_cannot_exceed_remaining_balance(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers)
+    resp = _buy(client, headers, account_id, card_id, 100.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    resp = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments",
+        json={"account_id": account_id, "amount": 150.0},
+        headers=headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_invoice_closed_after_being_fully_prepaid_becomes_paid(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers)
+    resp = _buy(client, headers, account_id, card_id, 100.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    # Paga o total ainda com a fatura aberta.
+    resp = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments",
+        json={"account_id": account_id, "amount": 100.0},
+        headers=headers,
+    )
+    assert resp.get_json()["data"]["status"] == "open"  # não vira "paid" sozinha ainda aberta
+
+    resp = client.post(f"/api/v1/invoices/{invoice_id}/close", headers=headers)
+    assert resp.status_code == 200
+    assert resp.get_json()["data"]["status"] == "paid"  # já cobria o total -> fecha direto paga
+
+
+def test_pay_invoice_after_partial_payment_only_charges_remaining(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, initial_balance=1000.0)
+    resp = _buy(client, headers, account_id, card_id, 300.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    client.post(
+        f"/api/v1/invoices/{invoice_id}/payments",
+        json={"account_id": account_id, "amount": 100.0},
+        headers=headers,
+    )
+    client.post(f"/api/v1/invoices/{invoice_id}/close", headers=headers)
+
+    resp = client.post(
+        f"/api/v1/invoices/{invoice_id}/pay", json={"account_id": account_id}, headers=headers
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["data"]["status"] == "paid"
+    assert resp.get_json()["data"]["paid_amount"] == "300.00"
+
+    # Só os 200 restantes foram debitados agora (100 já tinham saído antes).
+    account = client.get(f"/api/v1/accounts/{account_id}", headers=headers).get_json()["data"]
+    assert account["current_balance"] == "700.00"
+
+
+def test_cannot_register_payment_on_already_paid_invoice(client, auth_headers):
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers)
+    resp = _buy(client, headers, account_id, card_id, 100.0, "2026-07-05")
+    invoice_id = resp.get_json()["data"]["invoice_id"]
+
+    client.post(f"/api/v1/invoices/{invoice_id}/close", headers=headers)
+    client.post(
+        f"/api/v1/invoices/{invoice_id}/pay", json={"account_id": account_id}, headers=headers
+    )
+
+    resp = client.post(
+        f"/api/v1/invoices/{invoice_id}/payments",
+        json={"account_id": account_id, "amount": 1.0},
+        headers=headers,
+    )
+    assert resp.status_code == 409
+
+
 def test_cannot_use_credit_card_from_another_user(client, auth_headers):
     headers_a = auth_headers(email="a@example.com")
     headers_b = auth_headers(email="b@example.com")

@@ -15,6 +15,17 @@ class TransactionCreateSchema(Schema):
     notes = fields.String(required=False, load_default=None, allow_none=True)
 
 
+class InstallmentPurchaseCreateSchema(Schema):
+    account_id = fields.Integer(required=True)
+    credit_card_id = fields.Integer(required=True)
+    category_id = fields.Integer(required=False, load_default=None, allow_none=True)
+    description = fields.String(required=True, validate=validate.Length(min=1, max=255))
+    total_amount = fields.Decimal(required=True, as_string=False, validate=validate.Range(min=0.01))
+    installments = fields.Integer(required=True, validate=validate.Range(min=2, max=24))
+    date = fields.Date(required=True)
+    notes = fields.String(required=False, load_default=None, allow_none=True)
+
+
 class TransactionUpdateSchema(Schema):
     account_id = fields.Integer(required=False)
     category_id = fields.Integer(required=False, allow_none=True)
