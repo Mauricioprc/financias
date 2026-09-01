@@ -76,6 +76,48 @@ def test_purchase_after_closing_day_goes_to_next_month_invoice(client, auth_head
     assert inv_after["reference_month"] == "2026-08-01"
 
 
+def test_purchase_exactly_on_closing_day_already_goes_to_next_month(client, auth_headers):
+    """O dia do fechamento é o primeiro dia do novo ciclo, não o último do
+    que está fechando — uma compra feita nesse dia exato já entra na
+    próxima fatura, não na que está fechando."""
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=10)
+
+    resp_day_before = _buy(client, headers, account_id, card_id, 50.0, "2026-07-09")
+    resp_on_closing_day = _buy(client, headers, account_id, card_id, 70.0, "2026-07-10")
+
+    inv_before = client.get(
+        f"/api/v1/invoices/{resp_day_before.get_json()['data']['invoice_id']}", headers=headers
+    ).get_json()["data"]
+    inv_on_closing = client.get(
+        f"/api/v1/invoices/{resp_on_closing_day.get_json()['data']['invoice_id']}", headers=headers
+    ).get_json()["data"]
+
+    assert inv_before["reference_month"] == "2026-07-01"
+    assert inv_on_closing["reference_month"] == "2026-08-01"
+
+
+def test_closing_day_one_sends_every_day_of_the_month_to_next_invoice(client, auth_headers):
+    """Fechamento dia 1 é o caso extremo da mesma regra: como não existe
+    dia 0, absolutamente nenhuma compra do mês (nem no dia 1) fica na
+    fatura de referência daquele mês — todas rolam pro mês seguinte."""
+    headers = auth_headers()
+    card_id, account_id = _setup_card_and_account(client, headers, closing_day=1, due_day=10)
+
+    resp_first = _buy(client, headers, account_id, card_id, 50.0, "2026-08-01")
+    resp_last = _buy(client, headers, account_id, card_id, 70.0, "2026-08-31")
+
+    inv_first = client.get(
+        f"/api/v1/invoices/{resp_first.get_json()['data']['invoice_id']}", headers=headers
+    ).get_json()["data"]
+    inv_last = client.get(
+        f"/api/v1/invoices/{resp_last.get_json()['data']['invoice_id']}", headers=headers
+    ).get_json()["data"]
+
+    assert inv_first["reference_month"] == inv_last["reference_month"] == "2026-09-01"
+    assert inv_first["due_date"] == inv_last["due_date"] == "2026-09-10"
+
+
 def test_income_type_not_allowed_on_credit_card(client, auth_headers):
     headers = auth_headers()
     card_id, account_id = _setup_card_and_account(client, headers)
@@ -204,7 +246,7 @@ def test_partial_payment_on_open_invoice_reduces_balance_and_stays_open(client, 
     assert payment_tx[0]["amount"] == "100.00"
 
     # Uma nova compra ainda pode entrar na fatura (ela continua "open").
-    resp = _buy(client, headers, account_id, card_id, 50.0, "2026-07-10")
+    resp = _buy(client, headers, account_id, card_id, 50.0, "2026-07-08")
     assert resp.status_code == 201
     invoice = client.get(f"/api/v1/invoices/{invoice_id}", headers=headers).get_json()["data"]
     assert invoice["total_amount"] == "350.00"

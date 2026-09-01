@@ -15,12 +15,14 @@ def compute_invoice_period(
 ) -> tuple[date, date, date]:
     """Retorna (reference_month, closing_date, due_date) para uma compra.
 
-    Se a compra ocorre até o dia de fechamento do mês, ela entra na fatura
-    que fecha naquele mês; caso contrário, entra na fatura do mês seguinte.
+    Se a compra ocorre antes do dia de fechamento do mês, ela entra na
+    fatura que fecha naquele mês; no próprio dia de fechamento (ou depois),
+    já entra na fatura do mês seguinte — o dia do fechamento é o primeiro
+    dia do novo ciclo, não o último do que está fechando.
     """
     closing_date_this_month = clamped_date(purchase_date.year, purchase_date.month, closing_day)
 
-    if purchase_date.day <= closing_date_this_month.day:
+    if purchase_date.day < closing_date_this_month.day:
         ref_year, ref_month = purchase_date.year, purchase_date.month
     else:
         ref_year, ref_month = add_months(purchase_date.year, purchase_date.month, 1)
