@@ -135,9 +135,12 @@ def update_recurring_transaction(
             raise ValidationError(
                 "Só é possível vincular cartão de crédito a recorrências do tipo expense."
             )
+    # `fields` só contém as chaves que o cliente realmente mandou (o schema
+    # de update tem todos os campos opcionais e sem load_default, então uma
+    # chave ausente nem aparece aqui) — aplica todas elas, None incluído,
+    # pra permitir limpar um campo anulável (ex.: category_id) explicitamente.
     for key, value in fields.items():
-        if value is not None:
-            setattr(recurring, key, value)
+        setattr(recurring, key, value)
     db.session.commit()
     return recurring
 

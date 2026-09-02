@@ -15,8 +15,10 @@ from bot.handlers import (
     goals,
     insights,
     invoice_action,
+    invoice_view,
     investments,
     recurring,
+    recurring_category,
     reports,
     spending_by_category,
     transactions,
@@ -33,6 +35,11 @@ conversation.register_flow("invoice_action", invoice_action)
 # categoria" — multi-etapa curto (total do mês vs categoria específica),
 # mesmo padrão de goal_contribution.py.
 conversation.register_flow("spending_by_category", spending_by_category)
+# Categorizar uma recorrência existente (edição pontual de category_id) e
+# ver o detalhe de qualquer fatura (só consulta, diferente de
+# invoice_action que é pra ação de pagar/fechar).
+conversation.register_flow("recurring_category", recurring_category)
+conversation.register_flow("invoice_view", invoice_view)
 conversation.register_direct("balance", reports.handle_balance)
 conversation.register_direct("monthly_summary", reports.handle_monthly_summary)
 conversation.register_direct("accounts", accounts.handle_accounts)
