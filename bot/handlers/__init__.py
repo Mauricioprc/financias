@@ -18,6 +18,7 @@ from bot.handlers import (
     investments,
     recurring,
     reports,
+    spending_by_category,
     transactions,
     transfers,
 )
@@ -28,6 +29,10 @@ conversation.register_flow("transfers", transfers)
 # transfers.py) — contribuir pra meta e pagar/fechar fatura.
 conversation.register_flow("goal_contribution", goal_contribution)
 conversation.register_flow("invoice_action", invoice_action)
+# Correção de regressão + feature nova (ver commit): "Gastos por
+# categoria" — multi-etapa curto (total do mês vs categoria específica),
+# mesmo padrão de goal_contribution.py.
+conversation.register_flow("spending_by_category", spending_by_category)
 conversation.register_direct("balance", reports.handle_balance)
 conversation.register_direct("monthly_summary", reports.handle_monthly_summary)
 conversation.register_direct("accounts", accounts.handle_accounts)
