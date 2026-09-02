@@ -15,6 +15,7 @@ from decimal import Decimal
 from app.services import (
     account_service,
     category_service,
+    category_suggestion_service,
     credit_card_service,
     invoice_service,
     transaction_service,
@@ -33,6 +34,83 @@ DEFAULT_DESCRIPTION = "Transação via WhatsApp"
 def start(user) -> tuple[str, dict]:
     _render_type_prompt(to_wa_id(user.phone_number))
     return "awaiting_type", {}
+
+
+def start_quick(user, parsed: dict) -> tuple[str | None, dict]:
+    """Atalho de lançamento rápido (bot/quick_entry.py) — texto livre tipo
+    "50 mercado" em vez do menu passo-a-passo. SEMPRE despesa (ver
+    bot/quick_entry.py). Resolve o que dá pra resolver com confiança —
+    categoria por padrão já aprendido (category_suggestion_service),
+    descrição do próprio texto — e entrega o resto pro mesmo pipeline de
+    sempre a partir do ponto certo (_ask_category_or_skip/_ask_account/
+    _ask_credit_card_choice), sem duplicar nenhuma decisão que essas
+    funções já tomam.
+
+    NUNCA pula a pergunta de cartão mesmo quando tudo o resto foi
+    resolvido — ver _ask_credit_card_choice, ela continua perguntando
+    "foi no cartão?" sempre que o usuário tem algum cartão cadastrado.
+
+    `context["_quick"]` é só um marcador interno: com ele presente e
+    exatamente 1 conta cadastrada, `_ask_account` pula a pergunta de
+    conta (sem ambiguidade nenhuma pra resolver). O fluxo normal nunca
+    seta essa chave, então esse atalho não muda nada pra quem digita "1"
+    no menu.
+    """
+    description_hint = (parsed.get("description_hint") or "").strip()
+    description = description_hint or DEFAULT_DESCRIPTION
+
+    context = {
+        "_quick": True,
+        "type": "expense",
+        "amount": str(parsed["amount"]),
+        "description": description,
+    }
+
+    category_id = None
+    if description_hint:
+        category_id = category_suggestion_service.suggest_category(user.id, description_hint)
+
+    if category_id is not None:
+        return _ask_account(user, {**context, "category_id": category_id})
+
+    return _ask_category_or_skip(user, context)
+
+
+def start_repeat(user) -> tuple[str | None, dict]:
+    """Comando 'repetir' (bot/conversation.py) — repete a transação mais
+    recente do usuário (conta, categoria, cartão e descrição herdados
+    dela), perguntando só o valor."""
+    to = to_wa_id(user.phone_number)
+    items, _total = transaction_service.list_transactions(user.id, page=1, per_page=1)
+    if not items:
+        whatsapp_client.send_text(to, "Você ainda não lançou nada. Manda 'menu' pra começar.")
+        return None, {}
+
+    last = items[0]
+    context = {
+        "_repeat": True,
+        "type": last.type,
+        "account_id": last.account_id,
+        "category_id": last.category_id,
+        "credit_card_id": last.credit_card_id,
+        "description": last.description,
+    }
+
+    category_label = "Sem categoria"
+    if last.category_id:
+        try:
+            category_label = category_service.get_category(user.id, last.category_id).name
+        except ServiceError:
+            pass
+    account = account_service.get_account(user.id, last.account_id)
+
+    whatsapp_client.send_text(
+        to,
+        f"Repetir como {last.description} — {category_label} — {account.name}? "
+        "Só falta o valor.",
+    )
+    _render_amount_prompt(to)
+    return "awaiting_amount", context
 
 
 def handle_step(user, step: str, context: dict, event: dict) -> tuple[str | None, dict]:
@@ -199,6 +277,21 @@ def _handle_awaiting_type(user, context: dict, event: dict) -> tuple[str | None,
     return "awaiting_amount", context
 
 
+def _ask_category_or_skip(user, context: dict) -> tuple[str, dict]:
+    """Categoria: se não houver nenhuma categoria cadastrada desse tipo,
+    pula direto pra conta com category_id=None — mesma regra usada tanto
+    no fluxo normal (a partir do valor) quanto no atalho de lançamento
+    rápido (start_quick, quando a sugestão automática não encontrou nada
+    confiável)."""
+    to = to_wa_id(user.phone_number)
+    rows = _category_rows(user, context["type"])
+    if not rows[:-1]:  # só sobra o "Sem categoria" -> não há categorias desse tipo
+        return _ask_account(user, {**context, "category_id": None})
+
+    _render_category_prompt(user, to, context)
+    return "awaiting_category", context
+
+
 def _handle_awaiting_amount(user, context: dict, event: dict) -> tuple[str | None, dict]:
     to = to_wa_id(user.phone_number)
     amount = parse_amount(event.get("text") or "")
@@ -208,12 +301,14 @@ def _handle_awaiting_amount(user, context: dict, event: dict) -> tuple[str | Non
 
     context = {**context, "amount": str(amount)}
 
-    rows = _category_rows(user, context["type"])
-    if not rows[:-1]:  # só sobra o "Sem categoria" -> não há categorias desse tipo
-        return _ask_account(user, {**context, "category_id": None})
+    if context.get("_repeat"):
+        # Comando 'repetir' (start_repeat): todo o resto já veio da
+        # transação anterior — só faltava o valor, então vai direto pra
+        # confirmação em vez de perguntar categoria de novo.
+        _render_confirmation_prompt(user, to, context)
+        return "awaiting_confirmation", context
 
-    _render_category_prompt(user, to, context)
-    return "awaiting_category", context
+    return _ask_category_or_skip(user, context)
 
 
 def _handle_awaiting_category(user, context: dict, event: dict) -> tuple[str | None, dict]:
@@ -234,12 +329,20 @@ def _handle_awaiting_category(user, context: dict, event: dict) -> tuple[str | N
 
 def _ask_account(user, context: dict) -> tuple[str | None, dict]:
     to = to_wa_id(user.phone_number)
-    rows = _account_rows(user)
-    if not rows:
+    accounts = account_service.list_accounts(user.id)
+    if not accounts:
         whatsapp_client.send_text(
             to, "Você não tem nenhuma conta cadastrada ainda — cadastre uma no dashboard primeiro."
         )
         return None, {}
+
+    # Atalho de lançamento rápido (start_quick) marca o contexto com
+    # "_quick" — com exatamente 1 conta cadastrada, não há ambiguidade
+    # nenhuma pra resolver, então pula a pergunta. O fluxo normal nunca
+    # seta essa chave, então esse comportamento não muda em nada pra quem
+    # digita "1" no menu (sempre pergunta a conta, mesmo com só uma).
+    if context.get("_quick") and len(accounts) == 1:
+        return _ask_credit_card_choice(user, {**context, "account_id": accounts[0].id})
 
     _render_account_prompt(user, to)
     return "awaiting_account", context
@@ -258,11 +361,25 @@ def _handle_awaiting_account(user, context: dict, event: dict) -> tuple[str | No
     return _ask_credit_card_choice(user, {**context, "account_id": account.id})
 
 
+def _proceed_after_credit_card_step(user, to: str, context: dict) -> tuple[str, dict]:
+    """Depois de resolver cartão (perguntado ou pulado): descrição — a
+    menos que o atalho de lançamento rápido ou o comando 'repetir' já
+    tenham resolvido ela (start_quick/start_repeat setam
+    context["description"] de antemão), caso em que pula direto pra
+    confirmação. No fluxo normal, "description" nunca está em context
+    nesse ponto, então esse comportamento não muda em nada."""
+    if context.get("description"):
+        _render_confirmation_prompt(user, to, context)
+        return "awaiting_confirmation", context
+
+    _render_description_prompt(to)
+    return "awaiting_description", context
+
+
 def _ask_credit_card_choice(user, context: dict) -> tuple[str, dict]:
     to = to_wa_id(user.phone_number)
     if context["type"] != "expense" or not _credit_card_rows(user):
-        _render_description_prompt(to)
-        return "awaiting_description", context
+        return _proceed_after_credit_card_step(user, to, context)
 
     _render_credit_card_choice_prompt(to)
     return "awaiting_credit_card_choice", context
@@ -276,8 +393,7 @@ def _handle_awaiting_credit_card_choice(
 
     if choice in ("card_no", "não", "nao"):
         context = {**context, "credit_card_id": None}
-        _render_description_prompt(to)
-        return "awaiting_description", context
+        return _proceed_after_credit_card_step(user, to, context)
 
     if choice in ("card_yes", "sim"):
         _render_credit_card_prompt(user, to)
@@ -298,8 +414,7 @@ def _handle_awaiting_credit_card(user, context: dict, event: dict) -> tuple[str 
         return "awaiting_credit_card", context
 
     context = {**context, "credit_card_id": card.id}
-    _render_description_prompt(to)
-    return "awaiting_description", context
+    return _proceed_after_credit_card_step(user, to, context)
 
 
 def _handle_awaiting_description(user, context: dict, event: dict) -> tuple[str | None, dict]:

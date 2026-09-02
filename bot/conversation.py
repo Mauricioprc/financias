@@ -21,8 +21,10 @@ import logging
 from app.extensions import db
 from app.models.bot_conversation_state import BotConversationState
 from app.models.bot_processed_message import BotProcessedMessage
-from bot import auth, whatsapp_client
+from bot import auth, quick_entry, whatsapp_client
 from bot.menus import DIRECT_FLOWS, EXIT_KEYWORDS, flow_by_id, root_menu_sections, root_menu_text
+
+REPEAT_KEYWORD = "repetir"
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +199,7 @@ def _handle_root_selection(user, event: dict) -> None:
     flow = flow_by_id(selector)
 
     if flow is None:
-        send_root_menu(user)
+        _handle_unrecognized_root_selection(user, event)
         return
 
     if flow in DIRECT_FLOWS:
@@ -217,11 +219,45 @@ def _handle_root_selection(user, event: dict) -> None:
         )
         return
 
-    step, context = module.start(user)
+    _start_flow(user, flow, module.start(user))
+
+
+def _handle_unrecognized_root_selection(user, event: dict) -> None:
+    """Selector que não bate com nenhum id do menu (Fase A do bot: atalhos
+    de lançamento rápido). Antes de assumir "não entendi" e reenviar o
+    menu, tenta dois atalhos — nenhum dos dois altera o comportamento de
+    quem digita um id válido do menu ("1" etc.), porque só entram em jogo
+    depois que flow_by_id(selector) já deu None:
+
+    1. 'repetir' — repete a última transação, perguntando só o valor.
+    2. Lançamento rápido em texto livre ("50 mercado") — bot/quick_entry.py.
+
+    Sem nenhum dos dois reconhecer o texto, cai no comportamento de
+    sempre: reenvia o menu."""
+    text = (event.get("text") or "").strip()
+    module = FLOW_HANDLERS.get("new_transaction")
+
+    if module is not None and text.lower() == REPEAT_KEYWORD:
+        _start_flow(user, "new_transaction", module.start_repeat(user))
+        return
+
+    if module is not None:
+        parsed = quick_entry.try_parse_quick_entry(text)
+        if parsed is not None:
+            _start_flow(user, "new_transaction", module.start_quick(user, parsed))
+            return
+
+    send_root_menu(user)
+
+
+def _start_flow(user, flow: str, start_result: tuple[str | None, dict]) -> None:
+    step, context = start_result
     if step is None:
         # O fluxo já terminou na própria mensagem inicial (ex.: pré-condição
-        # não atendida, como "precisa de 2 contas pra transferir") — não há
-        # passo seguinte, então não deve sobrar estado de conversa nenhum.
+        # não atendida, como "precisa de 2 contas pra transferir", "repetir"
+        # sem nenhuma transação anterior, ou atalho de texto livre sem conta
+        # cadastrada) — não há passo seguinte, então não deve sobrar estado
+        # de conversa nenhum.
         return
     set_state(user.id, flow, step, context)
 
