@@ -24,6 +24,7 @@ ROOT_MENU_ITEMS = [
     {"id": "13", "flow": "net_worth", "label": "💎 Patrimônio"},
     {"id": "14", "flow": "goal_contribution", "label": "🎯 Contribuir pra meta"},
     {"id": "15", "flow": "invoice_action", "label": "💳 Pagar/fechar fatura"},
+    {"id": "16", "flow": "spending_by_category", "label": "📂 Gastos por categoria"},
 ]
 
 # Fluxos sem passo-a-passo — respondem na hora e não usam BotConversationState.
@@ -58,12 +59,8 @@ def root_menu_text() -> str:
     return "\n".join(lines)
 
 
-def root_menu_sections() -> list[dict]:
-    return [
-        {
-            "title": "MR Gestão",
-            "rows": [
-                {"id": item["id"], "title": item["label"]} for item in ROOT_MENU_ITEMS
-            ],
-        }
-    ]
+def root_menu_rows() -> list[dict]:
+    """Linhas pra send_list_paginated — o menu raiz já passou de 10 itens, e
+    o limite de 10 linhas por mensagem da API do WhatsApp exige paginação
+    (bot/conversation.py::send_root_menu usa send_list_paginated com isso)."""
+    return [{"id": item["id"], "title": item["label"]} for item in ROOT_MENU_ITEMS]

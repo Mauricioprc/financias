@@ -22,7 +22,7 @@ from app.extensions import db
 from app.models.bot_conversation_state import BotConversationState
 from app.models.bot_processed_message import BotProcessedMessage
 from bot import auth, quick_entry, whatsapp_client
-from bot.menus import DIRECT_FLOWS, EXIT_KEYWORDS, flow_by_id, root_menu_sections, root_menu_text
+from bot.menus import DIRECT_FLOWS, EXIT_KEYWORDS, flow_by_id, root_menu_rows, root_menu_text
 
 REPEAT_KEYWORD = "repetir"
 
@@ -114,7 +114,11 @@ def clear_state(user_id: int) -> None:
 def send_root_menu(user) -> None:
     to = to_wa_id(user.phone_number)
     try:
-        whatsapp_client.send_list(to, root_menu_text(), "Escolher", root_menu_sections())
+        # send_list (não paginado) trava com >10 linhas — o menu raiz já
+        # passou disso, precisa de send_list_paginated.
+        whatsapp_client.send_list_paginated(
+            to, root_menu_text(), "Escolher", root_menu_rows(), "MR Gestão"
+        )
     except whatsapp_client.WhatsAppApiError:
         # Lista interativa pode falhar em alguns clientes/números de teste —
         # cai pra texto simples, que sempre funciona.
