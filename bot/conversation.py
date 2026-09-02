@@ -115,9 +115,14 @@ def send_root_menu(user) -> None:
     to = to_wa_id(user.phone_number)
     try:
         # send_list (não paginado) trava com >10 linhas — o menu raiz já
-        # passou disso, precisa de send_list_paginated.
+        # passou disso, precisa de send_list_paginated. O corpo aqui é
+        # curto de propósito: root_menu_text() enumera todos os itens, o
+        # que ficaria redundante com as próprias linhas da lista (cada
+        # página já mostra só os itens dela); root_menu_text() continua
+        # sendo usado como está no fallback de texto simples abaixo, onde
+        # faz sentido enumerar tudo porque não há lista nenhuma.
         whatsapp_client.send_list_paginated(
-            to, root_menu_text(), "Escolher", root_menu_rows(), "MR Gestão"
+            to, "O que você quer fazer?", "Escolher", root_menu_rows(), "MR Gestão"
         )
     except whatsapp_client.WhatsAppApiError:
         # Lista interativa pode falhar em alguns clientes/números de teste —

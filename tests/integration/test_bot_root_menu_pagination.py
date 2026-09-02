@@ -58,6 +58,26 @@ def test_send_root_menu_paginates_into_multiple_list_messages(client, auth_heade
     assert total_rows == len(menus.ROOT_MENU_ITEMS)
 
 
+def test_send_root_menu_body_does_not_repeat_full_item_enumeration(
+    client, auth_headers, fake_whatsapp
+):
+    # Regressão: root_menu_text() (pensado só pro fallback de texto puro,
+    # com todos os itens enumerados) estava sendo usado como body das
+    # mensagens de lista interativa também — duplicando a enumeração
+    # completa em cima das próprias linhas da lista, que já mostram só os
+    # itens daquela página.
+    user, _ = _register_and_link(client, auth_headers)
+
+    conversation.send_root_menu(user)
+
+    list_messages = [entry for entry in fake_whatsapp if entry["kind"] == "list"]
+    assert list_messages
+    for entry in list_messages:
+        body = entry["args"][0]
+        assert "Lançar transação" not in body
+        assert len(body) < 100
+
+
 def test_root_menu_rows_cover_every_item():
     rows = menus.root_menu_rows()
     assert len(rows) == len(menus.ROOT_MENU_ITEMS)
