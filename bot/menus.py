@@ -22,6 +22,8 @@ ROOT_MENU_ITEMS = [
     {"id": "11", "flow": "balance_forecast", "label": "🔮 Previsão de saldo"},
     {"id": "12", "flow": "upcoming_bills", "label": "🗓️ Próximos vencimentos"},
     {"id": "13", "flow": "net_worth", "label": "💎 Patrimônio"},
+    {"id": "14", "flow": "goal_contribution", "label": "🎯 Contribuir pra meta"},
+    {"id": "15", "flow": "invoice_action", "label": "💳 Pagar/fechar fatura"},
 ]
 
 # Fluxos sem passo-a-passo — respondem na hora e não usam BotConversationState.

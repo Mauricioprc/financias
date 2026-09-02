@@ -11,8 +11,10 @@ from bot import conversation
 from bot.handlers import (
     accounts,
     credit_cards,
+    goal_contribution,
     goals,
     insights,
+    invoice_action,
     investments,
     recurring,
     reports,
@@ -22,6 +24,10 @@ from bot.handlers import (
 
 conversation.register_flow("new_transaction", transactions)
 conversation.register_flow("transfers", transfers)
+# Fase C do bot: ações de escrita novas (multi-etapa, mesmo padrão de
+# transfers.py) — contribuir pra meta e pagar/fechar fatura.
+conversation.register_flow("goal_contribution", goal_contribution)
+conversation.register_flow("invoice_action", invoice_action)
 conversation.register_direct("balance", reports.handle_balance)
 conversation.register_direct("monthly_summary", reports.handle_monthly_summary)
 conversation.register_direct("accounts", accounts.handle_accounts)
