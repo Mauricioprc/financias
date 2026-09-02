@@ -12,6 +12,7 @@ from bot.handlers import (
     accounts,
     credit_cards,
     goals,
+    insights,
     investments,
     recurring,
     reports,
@@ -28,3 +29,10 @@ conversation.register_direct("goals", goals.handle_goals)
 conversation.register_direct("investments", investments.handle_investments)
 conversation.register_direct("credit_cards", credit_cards.handle_credit_cards)
 conversation.register_direct("recurring", recurring.handle_recurring)
+# Fase B do bot: expõe o backend de insights que já existe e já é usado
+# pelo dashboard web — sem lógica de cálculo nova, só handlers formatando
+# o retorno dos services (ver bot/handlers/insights.py).
+conversation.register_direct("budget_progress", insights.handle_budget_progress)
+conversation.register_direct("balance_forecast", insights.handle_balance_forecast)
+conversation.register_direct("upcoming_bills", insights.handle_upcoming_bills)
+conversation.register_direct("net_worth", insights.handle_net_worth)

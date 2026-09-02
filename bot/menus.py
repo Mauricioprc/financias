@@ -18,6 +18,10 @@ ROOT_MENU_ITEMS = [
     {"id": "7", "flow": "investments", "label": "📈 Investimentos"},
     {"id": "8", "flow": "recurring", "label": "🔁 Recorrências"},
     {"id": "9", "flow": "transfers", "label": "🔀 Transferências"},
+    {"id": "10", "flow": "budget_progress", "label": "📋 Orçamentos"},
+    {"id": "11", "flow": "balance_forecast", "label": "🔮 Previsão de saldo"},
+    {"id": "12", "flow": "upcoming_bills", "label": "🗓️ Próximos vencimentos"},
+    {"id": "13", "flow": "net_worth", "label": "💎 Patrimônio"},
 ]
 
 # Fluxos sem passo-a-passo — respondem na hora e não usam BotConversationState.
@@ -29,6 +33,10 @@ DIRECT_FLOWS = {
     "investments",
     "credit_cards",
     "recurring",
+    "budget_progress",
+    "balance_forecast",
+    "upcoming_bills",
+    "net_worth",
 }
 
 # Palavras-chave que abortam qualquer fluxo em qualquer ponto e voltam ao menu raiz.

@@ -4,7 +4,7 @@ a tela de Relatórios do dashboard usa)."""
 
 from datetime import date
 
-from app.services import account_service, report_service
+from app.services import account_service, insights_service, report_service
 from bot import whatsapp_client
 from bot.conversation import to_wa_id
 from bot.formatting import money
@@ -38,4 +38,21 @@ def handle_monthly_summary(user) -> None:
         f"Despesas: {money(expense)}\n"
         f"{balance_icon} Saldo do mês: {money(net)}"
     )
+
+    # Reativo (só aparece quando o usuário pede o resumo) — não esbarra na
+    # janela de 24h do WhatsApp, porque não é mensagem espontânea. Sem
+    # nenhum alerta, o texto continua exatamente como já era antes.
+    anomalies = insights_service.detect_spending_anomalies(user.id)
+    invoice_trends = insights_service.detect_invoice_trend_alerts(user.id)
+    if anomalies or invoice_trends:
+        alert_lines = [
+            f"• {a['category_name']}: {a['pct_above_avg']:.0f}% acima da média"
+            for a in anomalies
+        ]
+        alert_lines += [
+            f"• {t['card_name']}: {t['pct_above_average']:.0f}% acima da média"
+            for t in invoice_trends
+        ]
+        text += "\n\n⚠️ Alertas:\n" + "\n".join(alert_lines)
+
     whatsapp_client.send_text(to_wa_id(user.phone_number), text)
