@@ -154,3 +154,47 @@ def test_goal_contribution_invalid_amount_reprompts(client, auth_headers, fake_w
     state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
     assert state.step == "awaiting_amount"
     assert "inválido" in fake_whatsapp[-1]["args"][0].lower()
+
+
+def test_goal_first_step_has_no_back_row_but_confirmation_has_back_button(
+    client, auth_headers, fake_whatsapp
+):
+    user, headers = _register_and_link(client, auth_headers)
+    goal = client.post(
+        "/api/v1/goals", json={"name": "Viagem", "target_amount": 1000}, headers=headers
+    ).get_json()["data"]
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "14", "m0"))
+    first_prompt = fake_whatsapp[-1]
+    assert first_prompt["kind"] == "list"
+    first_rows = first_prompt["args"][2][0]["rows"]
+    assert all(row["id"] != "back" for row in first_rows)
+
+    conversation._handle_event(_reply_event(phone, str(goal["id"]), "m1"))
+    conversation._handle_event(_text_event(phone, "100", "m2"))
+
+    confirmation_prompt = fake_whatsapp[-1]
+    assert confirmation_prompt["kind"] == "buttons"
+    button_ids = [b["id"] for b in confirmation_prompt["args"][1]]
+    assert "back" in button_ids
+
+
+def test_goal_contribution_back_via_reply_id_returns_to_goal_step(
+    client, auth_headers, fake_whatsapp
+):
+    user, headers = _register_and_link(client, auth_headers)
+    client.post("/api/v1/goals", json={"name": "Viagem", "target_amount": 1000}, headers=headers)
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "14", "m0"))
+    first_rows = fake_whatsapp[-1]["args"][2][0]["rows"]
+    conversation._handle_event(_reply_event(phone, first_rows[0]["id"], "m1"))
+
+    state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_amount"
+
+    conversation._handle_event(_reply_event(phone, "back", "m2"))
+
+    state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_goal"

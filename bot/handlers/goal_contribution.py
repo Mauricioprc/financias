@@ -63,8 +63,11 @@ def _active_goal_rows(user) -> list[dict]:
 
 
 def _render_goal_prompt(user, to: str) -> None:
+    # Primeiro passo do fluxo — nunca tem botão de voltar.
     rows = _active_goal_rows(user)
-    whatsapp_client.send_list_paginated(to, "Contribuir pra qual meta?", "Escolher", rows, "Metas")
+    flow_utils.render_list_with_back(
+        to, "Contribuir pra qual meta?", "Escolher", rows, "Metas", has_history=False
+    )
 
 
 def _render_amount_prompt(to: str, goal_name: str) -> None:
@@ -83,8 +86,11 @@ def _confirmation_summary(goal, amount: Decimal) -> str:
 def _render_confirmation_prompt(user, to: str, context: dict) -> None:
     goal = goal_service.get_goal(user.id, context["goal_id"])
     summary = _confirmation_summary(goal, Decimal(context["amount"]))
-    whatsapp_client.send_buttons(
-        to, summary, [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}]
+    flow_utils.render_buttons_with_back(
+        to,
+        summary,
+        [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}],
+        has_history=True,
     )
 
 

@@ -74,9 +74,12 @@ def _remaining(invoice) -> Decimal:
 
 
 def _render_card_prompt(user, to: str) -> None:
+    # Primeiro passo do fluxo — nunca tem botão de voltar.
     cards = [c for c in credit_card_service.list_credit_cards(user.id) if not c.is_archived]
     rows = [{"id": str(c.id), "title": c.name} for c in cards]
-    whatsapp_client.send_list_paginated(to, "Qual cartão?", "Escolher", rows, "Cartões")
+    flow_utils.render_list_with_back(
+        to, "Qual cartão?", "Escolher", rows, "Cartões", has_history=False
+    )
 
 
 def _render_invoice_prompt(user, to: str, context: dict) -> None:
@@ -89,7 +92,9 @@ def _render_invoice_prompt(user, to: str, context: dict) -> None:
         }
         for inv in invoices
     ]
-    whatsapp_client.send_list_paginated(to, "Qual fatura?", "Escolher", rows, "Faturas")
+    flow_utils.render_list_with_back(
+        to, "Qual fatura?", "Escolher", rows, "Faturas", has_history=True
+    )
 
 
 def _render_close_confirmation_prompt(user, to: str, context: dict) -> None:
@@ -99,8 +104,11 @@ def _render_close_confirmation_prompt(user, to: str, context: dict) -> None:
         f"total {money(invoice.total_amount)}? "
         "Não será mais possível adicionar compras a ela."
     )
-    whatsapp_client.send_buttons(
-        to, text, [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}]
+    flow_utils.render_buttons_with_back(
+        to,
+        text,
+        [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}],
+        has_history=True,
     )
 
 
@@ -110,8 +118,11 @@ def _render_payment_type_prompt(user, to: str, context: dict) -> None:
         f"Fatura de {invoice.reference_month.strftime('%m/%Y')} — "
         f"saldo devedor {money(_remaining(invoice))}. O que você quer fazer?"
     )
-    whatsapp_client.send_buttons(
-        to, text, [{"id": "full", "title": "Pagar tudo"}, {"id": "partial", "title": "Pagar parte"}]
+    flow_utils.render_buttons_with_back(
+        to,
+        text,
+        [{"id": "full", "title": "Pagar tudo"}, {"id": "partial", "title": "Pagar parte"}],
+        has_history=True,
     )
 
 
@@ -126,7 +137,9 @@ def _render_payment_amount_prompt(user, to: str, context: dict) -> None:
 def _render_payment_account_prompt(user, to: str) -> None:
     accounts = account_service.list_accounts(user.id)
     rows = [{"id": str(a.id), "title": a.name} for a in accounts]
-    whatsapp_client.send_list_paginated(to, "Pagar com qual conta?", "Escolher", rows, "Contas")
+    flow_utils.render_list_with_back(
+        to, "Pagar com qual conta?", "Escolher", rows, "Contas", has_history=True
+    )
 
 
 def _payment_amount(user, context: dict) -> Decimal:
@@ -144,8 +157,11 @@ def _render_payment_confirmation_prompt(user, to: str, context: dict) -> None:
         f"Pagar {money(amount)} da fatura de {invoice.reference_month.strftime('%m/%Y')} "
         f"com a conta {account.name}?"
     )
-    whatsapp_client.send_buttons(
-        to, text, [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}]
+    flow_utils.render_buttons_with_back(
+        to,
+        text,
+        [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}],
+        has_history=True,
     )
 
 

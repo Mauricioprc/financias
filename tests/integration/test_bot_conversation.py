@@ -327,11 +327,21 @@ def test_more_than_page_size_accounts_are_split_across_list_messages(
     assert len(lists) == 2
     assert "(1/2)" in lists[0]["args"][0]
     assert "(2/2)" in lists[1]["args"][0]
-    assert len(lists[0]["args"][2][0]["rows"]) == 10
-    assert len(lists[1]["args"][2][0]["rows"]) == 1
+    # Esse prompt não é o primeiro passo do fluxo (vem depois de
+    # tipo/categoria) — reserva 1 linha pro botão "◀️ Voltar" na última
+    # página (flow_utils.render_list_with_back), então só 9 itens reais
+    # cabem por página em vez de 10.
+    assert len(lists[0]["args"][2][0]["rows"]) == 9
+    assert len(lists[1]["args"][2][0]["rows"]) == 3  # 2 contas restantes + voltar
+    assert lists[1]["args"][2][0]["rows"][-1]["id"] == "back"
 
     # As 11 contas continuam todas alcançáveis (nenhuma foi descartada).
-    all_ids = {row["id"] for m in lists for row in m["args"][2][0]["rows"]}
+    all_ids = {
+        row["id"]
+        for m in lists
+        for row in m["args"][2][0]["rows"]
+        if row["id"] != "back"
+    }
     assert len(all_ids) == 11
 
     # Escolher uma linha da segunda página funciona normalmente.

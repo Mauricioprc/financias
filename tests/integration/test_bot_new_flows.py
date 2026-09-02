@@ -294,3 +294,65 @@ def test_transfer_flow_back_returns_to_from_account_step(client, auth_headers, f
     state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
     assert state.step == "awaiting_from_account"
     assert "from_account_id" not in state.context_json
+
+
+def test_transfer_first_step_has_no_back_row_but_second_step_does(
+    client, auth_headers, fake_whatsapp
+):
+    user, headers = _register_and_link(client, auth_headers)
+    client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta A", "type": "checking", "initial_balance": 200},
+        headers=headers,
+    )
+    client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta B", "type": "savings", "initial_balance": 50},
+        headers=headers,
+    )
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "9", "m0"))
+
+    first_prompt = fake_whatsapp[-1]
+    assert first_prompt["kind"] == "list"
+    first_rows = first_prompt["args"][2][0]["rows"]
+    assert all(row["id"] != "back" for row in first_rows)
+
+    acc_a_id = first_rows[0]["id"]
+    conversation._handle_event(_reply_event(phone, acc_a_id, "m1"))
+
+    second_prompt = fake_whatsapp[-1]
+    assert second_prompt["kind"] == "list"
+    second_rows = second_prompt["args"][2][0]["rows"]
+    assert any(row["id"] == "back" for row in second_rows)
+
+
+def test_transfer_flow_back_via_reply_id_works_like_typed_keyword(
+    client, auth_headers, fake_whatsapp
+):
+    user, headers = _register_and_link(client, auth_headers)
+    client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta A", "type": "checking", "initial_balance": 200},
+        headers=headers,
+    )
+    client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta B", "type": "savings", "initial_balance": 50},
+        headers=headers,
+    )
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "9", "m0"))
+    first_rows = fake_whatsapp[-1]["args"][2][0]["rows"]
+    conversation._handle_event(_reply_event(phone, first_rows[0]["id"], "m1"))
+
+    state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_to_account"
+
+    conversation._handle_event(_reply_event(phone, "back", "m2"))
+
+    state = db.session.query(BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_from_account"
+    assert "from_account_id" not in state.context_json

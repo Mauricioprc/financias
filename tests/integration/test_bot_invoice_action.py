@@ -254,3 +254,42 @@ def test_payment_confirmation_cancel_does_not_pay(client, auth_headers, fake_wha
     assert invoice.status == "closed"
     assert str(invoice.paid_amount) == "0.00"
     assert "cancelado" in fake_whatsapp[-1]["args"][0].lower()
+
+
+def test_invoice_action_first_step_has_no_back_row_but_second_step_does(
+    client, auth_headers, fake_whatsapp
+):
+    user, headers = _register_and_link(client, auth_headers)
+    _account, _card, invoice_id = _setup_card_account_invoice(client, headers)
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "15", "m0"))
+
+    first_prompt = fake_whatsapp[-1]
+    assert first_prompt["kind"] == "list"
+    first_rows = first_prompt["args"][2][0]["rows"]
+    assert all(row["id"] != "back" for row in first_rows)
+
+    conversation._handle_event(_reply_event(phone, "1", "m1"))
+
+    second_prompt = fake_whatsapp[-1]
+    assert second_prompt["kind"] == "list"
+    second_rows = second_prompt["args"][2][0]["rows"]
+    assert any(row["id"] == "back" for row in second_rows)
+
+
+def test_invoice_action_back_via_reply_id_returns_to_card_step(client, auth_headers, fake_whatsapp):
+    user, headers = _register_and_link(client, auth_headers)
+    _account, _card, invoice_id = _setup_card_account_invoice(client, headers)
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "15", "m0"))
+    conversation._handle_event(_reply_event(phone, "1", "m1"))
+
+    state = db.session.query(conversation.BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_invoice"
+
+    conversation._handle_event(_reply_event(phone, "back", "m2"))
+
+    state = db.session.query(conversation.BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_card"

@@ -60,14 +60,17 @@ def _account_rows(user, exclude_id: int | None = None) -> list[dict]:
 
 
 def _render_from_account_prompt(user, to: str) -> None:
+    # Primeiro passo do fluxo — nunca tem botão de voltar.
     rows = _account_rows(user)
-    whatsapp_client.send_list_paginated(to, "Transferir de qual conta?", "Escolher", rows, "Contas")
+    flow_utils.render_list_with_back(
+        to, "Transferir de qual conta?", "Escolher", rows, "Contas", has_history=False
+    )
 
 
 def _render_to_account_prompt(user, to: str, context: dict) -> None:
     rows = _account_rows(user, exclude_id=context.get("from_account_id"))
-    whatsapp_client.send_list_paginated(
-        to, "Transferir para qual conta?", "Escolher", rows, "Contas"
+    flow_utils.render_list_with_back(
+        to, "Transferir para qual conta?", "Escolher", rows, "Contas", has_history=True
     )
 
 
@@ -88,10 +91,11 @@ def _confirmation_summary(user, context: dict) -> str:
 
 def _render_confirmation_prompt(user, to: str, context: dict) -> None:
     summary = _confirmation_summary(user, context)
-    whatsapp_client.send_buttons(
+    flow_utils.render_buttons_with_back(
         to,
         summary,
         [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}],
+        has_history=True,
     )
 
 

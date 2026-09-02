@@ -141,10 +141,12 @@ def handle_step(user, step: str, context: dict, event: dict) -> tuple[str | None
 
 
 def _render_type_prompt(to: str) -> None:
-    whatsapp_client.send_buttons(
+    # Primeiro passo do fluxo — nunca tem botão de voltar (has_history=False).
+    flow_utils.render_buttons_with_back(
         to,
         "Vamos lançar uma transação. É receita ou despesa?",
         [{"id": "income", "title": "Receita"}, {"id": "expense", "title": "Despesa"}],
+        has_history=False,
     )
 
 
@@ -161,7 +163,9 @@ def _category_rows(user, tx_type: str) -> list[dict]:
 
 def _render_category_prompt(user, to: str, context: dict) -> None:
     rows = _category_rows(user, context["type"])
-    whatsapp_client.send_list_paginated(to, "Qual categoria?", "Escolher", rows, "Categorias")
+    flow_utils.render_list_with_back(
+        to, "Qual categoria?", "Escolher", rows, "Categorias", has_history=True
+    )
 
 
 def _account_rows(user) -> list[dict]:
@@ -171,14 +175,15 @@ def _account_rows(user) -> list[dict]:
 
 def _render_account_prompt(user, to: str) -> None:
     rows = _account_rows(user)
-    whatsapp_client.send_list_paginated(to, "Em qual conta?", "Escolher", rows, "Contas")
+    flow_utils.render_list_with_back(to, "Em qual conta?", "Escolher", rows, "Contas", has_history=True)
 
 
 def _render_credit_card_choice_prompt(to: str) -> None:
-    whatsapp_client.send_buttons(
+    flow_utils.render_buttons_with_back(
         to,
         "Foi no cartão de crédito?",
         [{"id": "card_yes", "title": "Sim"}, {"id": "card_no", "title": "Não"}],
+        has_history=True,
     )
 
 
@@ -189,7 +194,9 @@ def _credit_card_rows(user) -> list[dict]:
 
 def _render_credit_card_prompt(user, to: str) -> None:
     rows = _credit_card_rows(user)
-    whatsapp_client.send_list_paginated(to, "Qual cartão?", "Escolher", rows, "Cartões")
+    flow_utils.render_list_with_back(
+        to, "Qual cartão?", "Escolher", rows, "Cartões", has_history=True
+    )
 
 
 def _render_description_prompt(to: str) -> None:
@@ -226,8 +233,11 @@ def _confirmation_summary(user, context: dict) -> str:
 
 def _render_confirmation_prompt(user, to: str, context: dict) -> None:
     summary = _confirmation_summary(user, context)
-    whatsapp_client.send_buttons(
-        to, summary, [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}]
+    flow_utils.render_buttons_with_back(
+        to,
+        summary,
+        [{"id": "confirm", "title": "Confirmar"}, {"id": "cancel", "title": "Cancelar"}],
+        has_history=True,
     )
 
 
@@ -265,10 +275,11 @@ def _handle_awaiting_type(user, context: dict, event: dict) -> tuple[str | None,
         choice
     )
     if tx_type is None:
-        whatsapp_client.send_buttons(
+        flow_utils.render_buttons_with_back(
             to,
             "Não entendi. É receita ou despesa?",
             [{"id": "income", "title": "Receita"}, {"id": "expense", "title": "Despesa"}],
+            has_history=False,
         )
         return "awaiting_type", context
 
