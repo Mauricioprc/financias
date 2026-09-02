@@ -26,6 +26,7 @@ ROOT_MENU_ITEMS = [
     {"id": "15", "flow": "invoice_action", "label": "💳 Pagar/fechar fatura"},
     {"id": "16", "flow": "spending_by_category", "label": "📂 Gastos por categoria"},
     {"id": "17", "flow": "recurring_category", "label": "🏷️ Categorizar assinatura"},
+    {"id": "18", "flow": "invoice_view", "label": "🧾 Ver fatura"},
 ]
 
 # Fluxos sem passo-a-passo — respondem na hora e não usam BotConversationState.
