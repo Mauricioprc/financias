@@ -32,29 +32,29 @@ def _add_months(start: date, offset: int) -> date:
     return date(year, month, 1)
 
 
-def balance_history(user_id: int, days: int = 30) -> list[dict]:
-    """Saldo total (soma de todas as contas) ao final de cada um dos últimos
-    `days` dias, reconstruído a partir do saldo atual e das transações já
-    efetivadas (is_paid) nesse período."""
+def balance_history(user_id: int, days: int = 30, account_id: int | None = None) -> list[dict]:
+    """Saldo total (soma de todas as contas, ou só de `account_id` quando
+    informado) ao final de cada um dos últimos `days` dias, reconstruído a
+    partir do saldo atual e das transações já efetivadas (is_paid) nesse
+    período."""
     today = date.today()
     start = today - timedelta(days=days - 1)
     day_list = [start + timedelta(days=i) for i in range(days)]
 
-    total_balance = sum(
-        (a.current_balance for a in db.session.query(Account).filter_by(user_id=user_id)),
-        Decimal("0.00"),
-    )
+    accounts_query = db.session.query(Account).filter_by(user_id=user_id)
+    if account_id is not None:
+        accounts_query = accounts_query.filter(Account.id == account_id)
+    total_balance = sum((a.current_balance for a in accounts_query), Decimal("0.00"))
 
-    transactions = (
-        db.session.query(Transaction.date, Transaction.type, Transaction.amount)
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.is_paid.is_(True),
-            Transaction.date >= start,
-            Transaction.date <= today,
-        )
-        .all()
+    tx_query = db.session.query(Transaction.date, Transaction.type, Transaction.amount).filter(
+        Transaction.user_id == user_id,
+        Transaction.is_paid.is_(True),
+        Transaction.date >= start,
+        Transaction.date <= today,
     )
+    if account_id is not None:
+        tx_query = tx_query.filter(Transaction.account_id == account_id)
+    transactions = tx_query.all()
     net_by_day: dict[date, Decimal] = {}
     for tx_date, tx_type, amount in transactions:
         net_by_day[tx_date] = net_by_day.get(tx_date, Decimal("0.00")) + _signed_amount(
@@ -69,24 +69,26 @@ def balance_history(user_id: int, days: int = 30) -> list[dict]:
     return [{"date": d, "balance": balances[i]} for i, d in enumerate(day_list)]
 
 
-def category_breakdown(user_id: int, month: str, type: str = "expense") -> list[dict]:
+def category_breakdown(
+    user_id: int, month: str, type: str = "expense", account_id: int | None = None
+) -> list[dict]:
     """Total gasto (ou recebido) por categoria em um mês `YYYY-MM`, do maior
-    para o menor."""
+    para o menor — de todas as contas, ou só de `account_id` quando
+    informado."""
     year_str, month_str = month.split("-")
     year, mo = int(year_str), int(month_str)
     start = _month_start(year, mo)
     end = date(year, mo, monthrange(year, mo)[1])
 
-    rows = (
-        db.session.query(Transaction.category_id, Transaction.amount)
-        .filter(
-            Transaction.user_id == user_id,
-            Transaction.type == type,
-            Transaction.date >= start,
-            Transaction.date <= end,
-        )
-        .all()
+    query = db.session.query(Transaction.category_id, Transaction.amount).filter(
+        Transaction.user_id == user_id,
+        Transaction.type == type,
+        Transaction.date >= start,
+        Transaction.date <= end,
     )
+    if account_id is not None:
+        query = query.filter(Transaction.account_id == account_id)
+    rows = query.all()
 
     totals: dict[int | None, Decimal] = {}
     for category_id, amount in rows:

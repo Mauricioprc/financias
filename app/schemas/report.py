@@ -3,6 +3,7 @@ from marshmallow import Schema, fields, validate
 
 class BalanceHistoryQuerySchema(Schema):
     days = fields.Integer(required=False, load_default=30, validate=validate.Range(min=1, max=365))
+    account_id = fields.Integer(required=False, load_default=None, allow_none=True)
 
 
 class BalanceHistoryPointSchema(Schema):
@@ -15,6 +16,7 @@ class CategoryBreakdownQuerySchema(Schema):
     type = fields.String(
         required=False, load_default="expense", validate=validate.OneOf(("income", "expense"))
     )
+    account_id = fields.Integer(required=False, load_default=None, allow_none=True)
 
 
 class CategoryBreakdownItemSchema(Schema):

@@ -133,3 +133,64 @@ def test_reports_scoped_to_authenticated_user(client, auth_headers):
 
     resp = client.get("/api/v1/reports/balance-history?days=1", headers=headers_b)
     assert resp.get_json()["data"][0]["balance"] == "0.00"
+
+
+def test_balance_history_filters_by_account_id(client, auth_headers):
+    headers = auth_headers()
+    account_a = _create_account(client, headers, initial_balance=500.0)
+    account_b = _create_account(client, headers, initial_balance=300.0)
+
+    resp = client.get(
+        "/api/v1/reports/balance-history",
+        query_string={"days": 3, "account_id": account_a},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    points = resp.get_json()["data"]
+    assert points[-1]["balance"] == "500.00"
+
+    resp = client.get(
+        "/api/v1/reports/balance-history", query_string={"days": 3}, headers=headers
+    )
+    points_all = resp.get_json()["data"]
+    assert points_all[-1]["balance"] == "800.00"
+
+    # account_id de nenhuma transação/conta do usuário -> não quebra, só some.
+    resp = client.get(
+        "/api/v1/reports/balance-history",
+        query_string={"days": 3, "account_id": 999999},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["data"][-1]["balance"] == "0.00"
+
+
+def test_category_breakdown_filters_by_account_id(client, auth_headers):
+    headers = auth_headers()
+    account_a = _create_account(client, headers, initial_balance=0.0)
+    account_b = _create_account(client, headers, initial_balance=0.0)
+    category_id = _create_category(client, headers, "Mercado", "expense")
+    month = date.today().strftime("%Y-%m")
+
+    _create_transaction(
+        client, headers, account_id=account_a, category_id=category_id, amount=100.0
+    )
+    _create_transaction(
+        client, headers, account_id=account_b, category_id=category_id, amount=50.0
+    )
+
+    resp = client.get(
+        "/api/v1/reports/category-breakdown",
+        query_string={"month": month, "account_id": account_a},
+        headers=headers,
+    )
+    assert resp.status_code == 200
+    items = resp.get_json()["data"]
+    assert len(items) == 1
+    assert items[0]["total"] == "100.00"
+
+    resp = client.get(
+        "/api/v1/reports/category-breakdown", query_string={"month": month}, headers=headers
+    )
+    items_all = resp.get_json()["data"]
+    assert items_all[0]["total"] == "150.00"

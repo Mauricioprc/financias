@@ -25,7 +25,9 @@ income_vs_expense_out_schema = IncomeVsExpenseItemSchema()
 @require_user
 @validate_query(balance_history_query_schema)
 def balance_history_route(query, user_id):
-    points = report_service.balance_history(user_id, days=query["days"])
+    points = report_service.balance_history(
+        user_id, days=query["days"], account_id=query["account_id"]
+    )
     return jsonify(
         {
             "data": balance_history_out_schema.dump(points, many=True),
@@ -38,7 +40,9 @@ def balance_history_route(query, user_id):
 @require_user
 @validate_query(category_breakdown_query_schema)
 def category_breakdown_route(query, user_id):
-    items = report_service.category_breakdown(user_id, month=query["month"], type=query["type"])
+    items = report_service.category_breakdown(
+        user_id, month=query["month"], type=query["type"], account_id=query["account_id"]
+    )
     return jsonify(
         {
             "data": category_breakdown_out_schema.dump(items, many=True),
