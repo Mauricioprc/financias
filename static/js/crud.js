@@ -1,4 +1,8 @@
-/* Helper genérico para telas de CRUD simples (lista + criar + editar + excluir). */
+/* Helper genérico para telas de CRUD simples (lista + criar + editar + excluir).
+   renderItem devolve {title, subtitle, value, valueClass, progress, extra} —
+   `extra` é um nó DOM opcional (ou null) anexado depois da barra de
+   progresso, pra conteúdo extra dentro do item que não caiba no layout
+   título/subtítulo/valor padrão (ex.: mini-tiles em creditCards.js). */
 
 /* Barra de progresso opcional para um item de lista — info.progress = { pct, className }. */
 function progressBar(progress) {
@@ -116,8 +120,8 @@ function mountCrudView(container, config) {
       list.appendChild(
         UI.el(
           "div",
-          { class: "list-item" + (info.progress ? " list-item--stacked" : "") },
-          [row, info.progress ? progressBar(info.progress) : null]
+          { class: "list-item" + (info.progress || info.extra ? " list-item--stacked" : "") },
+          [row, info.progress ? progressBar(info.progress) : null, info.extra || null]
         )
       );
     });

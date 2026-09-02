@@ -7,13 +7,15 @@
 async function renderReportsView(container) {
   container.appendChild(UI.el("div", { class: "loading" }, "Carregando..."));
 
+  let accounts;
   let creditCards;
   let goals;
   let insightsSummary;
   let netWorthToday;
   let netWorthHistory;
   try {
-    [creditCards, goals, insightsSummary, netWorthToday, netWorthHistory] = await Promise.all([
+    [accounts, creditCards, goals, insightsSummary, netWorthToday, netWorthHistory] = await Promise.all([
+      Api.accounts.list(),
       Api.creditCards.list(),
       Api.goals.list(),
       // Enriquecimento, não crítico — sem isso a tela segue funcionando,
@@ -28,9 +30,10 @@ async function renderReportsView(container) {
     return;
   }
 
-  const state = { month: UI.todayISO().slice(0, 7) };
+  const state = { month: UI.todayISO().slice(0, 7), account_id: "" };
   let incomeExpenseChart = null;
   let breakdownChart = null;
+  let balanceHistoryChart = null;
 
   container.innerHTML = "";
   container.appendChild(UI.el("h1", { class: "page-title" }, "Relatórios"));
@@ -38,8 +41,41 @@ async function renderReportsView(container) {
   const theme = ChartTheme.applyDefaults();
   renderNetWorthSection();
 
+  const summaryLine = UI.el("div", { class: "section-title" });
+  container.appendChild(summaryLine);
+
+  // Filtro por conta — controla só os dois gráficos que consultam o backend
+  // por account_id (evolução de saldo e gastos por categoria); receitas x
+  // despesas, faturas por cartão e metas continuam sempre "todas as contas"
+  // (os endpoints deles não têm esse filtro).
+  const accountFilterField = UI.el("div", { class: "form-field" }, [
+    UI.el("label", {}, "Conta"),
+    UI.el(
+      "select",
+      {
+        onchange: (e) => {
+          state.account_id = e.target.value;
+          renderBalanceHistory();
+          renderBreakdown();
+        },
+      },
+      [{ value: "", label: "(todas as contas)" }]
+        .concat(accounts.map((a) => ({ value: a.id, label: a.name })))
+        .map((opt) => UI.el("option", { value: opt.value }, opt.label))
+    ),
+  ]);
+  container.appendChild(UI.el("div", { class: "filters-bar" }, [accountFilterField]));
+
   const grid = UI.el("div", { class: "report-grid" });
   container.appendChild(grid);
+
+  const balanceHistoryWrap = UI.el("div", { class: "chart-card__canvas-wrap" });
+  grid.appendChild(
+    UI.el("div", { class: "card" }, [
+      UI.el("div", { class: "chart-card__title" }, "Evolução do saldo (30 dias)"),
+      balanceHistoryWrap,
+    ])
+  );
 
   const incomeExpenseWrap = UI.el("div", { class: "chart-card__canvas-wrap" });
   grid.appendChild(
@@ -94,6 +130,16 @@ async function renderReportsView(container) {
     return;
   }
 
+  // Resumo rápido do mês corrente (último ponto dos 12 meses já buscados
+  // acima — sem chamada duplicada). Esse endpoint não tem filtro por
+  // conta, então esse resumo é sempre "todas as contas", diferente dos
+  // dois gráficos abaixo dele.
+  const currentMonthIncome = summary.income[summary.income.length - 1] || 0;
+  const currentMonthExpense = summary.expense[summary.expense.length - 1] || 0;
+  summaryLine.textContent =
+    `receitas ${UI.money(currentMonthIncome)} · despesas ${UI.money(currentMonthExpense)} · ` +
+    `saldo do mês ${UI.money(currentMonthIncome - currentMonthExpense)}`;
+
   const ieCanvas = UI.el("canvas", {});
   incomeExpenseWrap.appendChild(ieCanvas);
   incomeExpenseChart = new Chart(ieCanvas, {
@@ -115,12 +161,52 @@ async function renderReportsView(container) {
     },
   });
 
+  async function renderBalanceHistory() {
+    if (balanceHistoryChart) balanceHistoryChart.destroy();
+    balanceHistoryWrap.innerHTML = "";
+    let history;
+    try {
+      history = await ReportData.balanceHistory(30, state.account_id || undefined);
+    } catch (err) {
+      UI.showApiError(err);
+      return;
+    }
+    const canvas = UI.el("canvas", {});
+    balanceHistoryWrap.appendChild(canvas);
+    balanceHistoryChart = new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: history.labels,
+        datasets: [
+          {
+            data: history.values,
+            borderColor: theme.accent,
+            backgroundColor: theme.accent + "22",
+            fill: true,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+          },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { maxTicksLimit: 6 }, grid: { display: false } },
+          y: { ticks: { callback: (v) => UI.money(v) }, grid: { color: theme.border } },
+        },
+      },
+    });
+  }
+  await renderBalanceHistory();
+
   async function renderBreakdown() {
     if (breakdownChart) breakdownChart.destroy();
     breakdownWrap.innerHTML = "";
     let breakdown;
     try {
-      breakdown = await ReportData.categoryBreakdown(state.month, "expense");
+      breakdown = await ReportData.categoryBreakdown(state.month, "expense", state.account_id || undefined);
     } catch (err) {
       UI.showApiError(err);
       return;

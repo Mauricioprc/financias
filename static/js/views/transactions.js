@@ -278,11 +278,24 @@ async function renderTransactionsView(container) {
   let accounts;
   let categories;
   let creditCards;
+  let monthSummary;
+  let monthCount;
   try {
-    [accounts, categories, creditCards] = await Promise.all([
+    const firstDayOfMonth = UI.todayISO().slice(0, 8) + "01";
+    [accounts, categories, creditCards, monthSummary, monthCount] = await Promise.all([
       Api.accounts.list(),
       Api.categories.list(),
       Api.creditCards.list(),
+      // Resumo do mês corrente — independente dos filtros da tela (esses
+      // só controlam a lista abaixo). Enriquecimento, não crítico.
+      Api.reports
+        .incomeVsExpense(1)
+        .then((items) => items[0])
+        .catch(() => null),
+      Api.transactions
+        .list({ date_from: firstDayOfMonth, date_to: UI.todayISO(), per_page: 1 })
+        .then((r) => r.meta.total)
+        .catch(() => null),
     ]);
   } catch (err) {
     container.innerHTML = "";
@@ -317,6 +330,17 @@ async function renderTransactionsView(container) {
     ),
   ]);
   container.appendChild(header);
+
+  if (monthCount != null && monthSummary) {
+    container.appendChild(
+      UI.el(
+        "div",
+        { class: "section-title", style: "margin-top:-8px" },
+        `${monthCount} lançamento(s) este mês · receitas ${UI.money(monthSummary.income)} · ` +
+          `despesas ${UI.money(monthSummary.expense)}`
+      )
+    );
+  }
 
   const filtersBar = UI.el("div", { class: "filters-bar" }, [
     UI.el("div", { class: "form-field" }, [

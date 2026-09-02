@@ -254,9 +254,12 @@ const Api = (() => {
     },
 
     reports: {
-      balanceHistory: (days) => get("/reports/balance-history", { days }).then((r) => r.data),
-      categoryBreakdown: (month, type) =>
-        get("/reports/category-breakdown", { month, type }).then((r) => r.data),
+      balanceHistory: (days, accountId) =>
+        get("/reports/balance-history", { days, account_id: accountId }).then((r) => r.data),
+      categoryBreakdown: (month, type, accountId) =>
+        get("/reports/category-breakdown", { month, type, account_id: accountId }).then(
+          (r) => r.data
+        ),
       incomeVsExpense: (months) =>
         get("/reports/income-vs-expense", { months }).then((r) => r.data),
     },

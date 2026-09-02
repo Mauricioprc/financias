@@ -197,6 +197,20 @@ async function renderRecurringView(container) {
       );
       const monthlyTotal = activeMonthlySubscriptions.reduce((sum, r) => sum + Number(r.amount), 0);
       container.dispatchEvent(new CustomEvent("subscriptions-total", { detail: monthlyTotal }));
+
+      // Duas contagens diferentes: total de recorrências ativas (todas,
+      // não só assinaturas de cartão) x quantas delas já geraram
+      // lançamento neste mês corrente (last_generated no mês/ano atual).
+      const activeCount = items.filter((r) => r.is_active).length;
+      const currentMonthKey = UI.todayISO().slice(0, 7);
+      const generatedThisMonth = items.filter(
+        (r) =>
+          r.is_active && r.last_generated && String(r.last_generated).slice(0, 7) === currentMonthKey
+      ).length;
+      container.dispatchEvent(
+        new CustomEvent("recurring-counts", { detail: { activeCount, generatedThisMonth } })
+      );
+
       return items;
     },
     createItem: (data) => Api.recurring.create(data),
@@ -241,6 +255,18 @@ async function renderRecurringView(container) {
   // Resumo do total mensal comprometido em assinaturas — atualizado toda
   // vez que a lista recarrega (mountCrudView refaz o container inteiro, daí
   // o evento em vez de guardar uma referência de nó que seria descartada).
+  container.addEventListener("recurring-counts", (e) => {
+    let summary = UI.qs(".recurring-counts-summary", container);
+    if (!summary) {
+      summary = UI.el("div", { class: "section-title recurring-counts-summary" });
+      const header = UI.qs(".page-header", container);
+      if (header) header.insertAdjacentElement("afterend", summary);
+    }
+    summary.textContent =
+      `${e.detail.activeCount} recorrência(s) ativa(s) · ` +
+      `${e.detail.generatedThisMonth} já geraram lançamento este mês`;
+  });
+
   container.addEventListener("subscriptions-total", (e) => {
     let summary = UI.qs(".subscriptions-summary", container);
     if (!summary) {

@@ -24,16 +24,16 @@ const ReportData = (() => {
     return months;
   }
 
-  async function balanceHistory(days) {
-    const points = await Api.reports.balanceHistory(days);
+  async function balanceHistory(days, accountId) {
+    const points = await Api.reports.balanceHistory(days, accountId);
     return {
       labels: points.map((p) => dayLabel(p.date)),
       values: points.map((p) => Number(p.balance)),
     };
   }
 
-  async function categoryBreakdown(month, type) {
-    const items = await Api.reports.categoryBreakdown(month, type);
+  async function categoryBreakdown(month, type, accountId) {
+    const items = await Api.reports.categoryBreakdown(month, type, accountId);
     return {
       labels: items.map((i) => i.category_name),
       values: items.map((i) => Number(i.total)),

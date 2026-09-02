@@ -70,19 +70,35 @@ async function renderCreditCardsView(container) {
     transformSubmit: toAccountId,
     loadItems: async () => {
       const cards = await Api.creditCards.list();
-      const [openInvoices, currentInvoices] = await Promise.all([
+      const [openInvoices, currentInvoices, insightsSummary] = await Promise.all([
         Promise.all(
           cards.map((c) =>
             Api.invoices.list({ credit_card_id: c.id, status: "open" }).catch(() => [])
           )
         ),
         Promise.all(cards.map((c) => Api.creditCards.currentInvoice(c.id).catch(() => null))),
+        // Enriquecimento, não crítico — sem isso os cards só ficam sem o
+        // aviso de tendência de fatura.
+        Api.insights.summary().catch(() => null),
       ]);
-      return cards.map((c, i) => ({
+      const invoiceTrendByCardId = Object.fromEntries(
+        (insightsSummary ? insightsSummary.invoice_trends : []).map((t) => [t.card_id, t])
+      );
+
+      const items = cards.map((c, i) => ({
         ...c,
         usedAmount: openInvoices[i].reduce((sum, inv) => sum + Number(inv.total_amount), 0),
         currentInvoice: currentInvoices[i],
+        invoiceTrend: invoiceTrendByCardId[c.id] || null,
       }));
+
+      // Contador do topo: N cartões · M com fatura acima da média este ciclo.
+      const trendCount = items.filter((c) => c.invoiceTrend).length;
+      container.dispatchEvent(
+        new CustomEvent("credit-cards-counts", { detail: { total: items.length, trendCount } })
+      );
+
+      return items;
     },
     createItem: (data) => Api.creditCards.create(data),
     updateItem: (id, data) => Api.creditCards.update(id, data),
@@ -91,17 +107,49 @@ async function renderCreditCardsView(container) {
       const limit = Number(c.credit_limit) || 1;
       const pct = Math.min(100, Math.round((c.usedAmount / limit) * 100));
       const accountLabel = c.account_id ? accountNameById[String(c.account_id)] : null;
-      const currentInvoiceLabel = c.currentInvoice
-        ? c.currentInvoice.persisted
-          ? `fatura atual: ${UI.money(c.currentInvoice.total_amount)}`
-          : "fatura atual: ainda sem compras"
-        : null;
       const subtitleParts = [
-        `${UI.money(c.usedAmount)} de ${UI.money(c.credit_limit)} usados (${pct}%)`,
-        `fecha dia ${c.closing_day}, vence dia ${c.due_day}`,
         accountLabel ? `conta: ${accountLabel}` : null,
-        currentInvoiceLabel,
+        c.is_archived ? "arquivado" : null,
       ].filter(Boolean);
+
+      const tiles = c.is_archived
+        ? null
+        : UI.el("div", { class: "tiles tiles--compact" }, [
+            UI.el("div", { class: "tile tile--compact" }, [
+              UI.el("div", { class: "tile__label" }, "Limite usado"),
+              UI.el("div", { class: "tile__value" }, `${pct}% · ${UI.money(c.usedAmount)}`),
+            ]),
+            UI.el("div", { class: "tile tile--compact" }, [
+              UI.el("div", { class: "tile__label" }, "Fatura atual"),
+              UI.el(
+                "div",
+                { class: "tile__value" },
+                c.currentInvoice
+                  ? c.currentInvoice.persisted
+                    ? UI.money(c.currentInvoice.total_amount)
+                    : "sem compras"
+                  : "—"
+              ),
+            ]),
+            UI.el("div", { class: "tile tile--compact" }, [
+              UI.el("div", { class: "tile__label" }, "Fecha/vence"),
+              UI.el("div", { class: "tile__value" }, `dia ${c.closing_day} / dia ${c.due_day}`),
+            ]),
+          ]);
+
+      const trendAlert = c.invoiceTrend
+        ? UI.el(
+            "div",
+            { class: "card-alert" },
+            `⚠ fatura projetada ${Math.round(Number(c.invoiceTrend.pct_above_average))}% acima da média`
+          )
+        : null;
+
+      const extra =
+        tiles || trendAlert
+          ? UI.el("div", {}, [tiles, trendAlert].filter(Boolean))
+          : null;
+
       return {
         title:
           (c.bank_name ? `${c.bank_name} · ` : "") + c.name + (c.is_archived ? " (arquivado)" : ""),
@@ -110,6 +158,7 @@ async function renderCreditCardsView(container) {
         progress: c.is_archived
           ? null
           : { pct, className: pct >= 90 ? "progress-bar__fill--danger" : pct >= 70 ? "progress-bar__fill--warning" : "" },
+        extra,
       };
     },
     extraRowActions: (card) => [
@@ -122,6 +171,19 @@ async function renderCreditCardsView(container) {
         "Faturas"
       ),
     ],
+  });
+
+  container.addEventListener("credit-cards-counts", (e) => {
+    let summary = UI.qs(".credit-cards-counts-summary", container);
+    if (!summary) {
+      summary = UI.el("div", { class: "section-title credit-cards-counts-summary" });
+      const header = UI.qs(".page-header", container);
+      if (header) header.insertAdjacentElement("afterend", summary);
+    }
+    summary.textContent =
+      e.detail.trendCount > 0
+        ? `${e.detail.total} cartão(ões) · ${e.detail.trendCount} com fatura acima da média este ciclo`
+        : `${e.detail.total} cartão(ões)`;
   });
 }
 
