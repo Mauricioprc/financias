@@ -59,11 +59,16 @@ def _months_between(start: date, end: date) -> int:
     return (end.year - start.year) * 12 + (end.month - start.month)
 
 
-def _month_period_bounds(reference: date, months_back: int) -> tuple[date, date]:
+def month_period_bounds(reference: date, months_back: int) -> tuple[date, date]:
     """(início, fim) do "recorte de dia equivalente" do mês `months_back`
     meses antes de `reference`: do dia 1 até o dia `reference.day` daquele
     mês (com clamp — ex.: dia 31 vira o último dia real do mês em questão).
-    `months_back=0` dá o mês corrente, do dia 1 até hoje."""
+    `months_back=0` dá o mês corrente, do dia 1 até hoje.
+
+    Pública porque `budget_service.get_budget_progress` reaproveita o
+    mesmo recorte (mês corrente, dia 1 até hoje) pra somar gasto por
+    categoria — mesmo motivo de `next_occurrence` ser pública em
+    `recurring_transaction_service`."""
     year, month = add_months(reference.year, reference.month, -months_back)
     start = date(year, month, 1)
     end = clamped_date(year, month, reference.day)
@@ -228,7 +233,7 @@ def compare_category_spending(user_id: int) -> list[dict]:
         return []
 
     def period_sums(months_back: int) -> dict[int, Decimal]:
-        start, end = _month_period_bounds(today, months_back)
+        start, end = month_period_bounds(today, months_back)
         rows = (
             db.session.query(
                 Transaction.category_id, func.coalesce(func.sum(Transaction.amount), 0)

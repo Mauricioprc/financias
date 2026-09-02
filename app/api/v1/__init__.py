@@ -4,6 +4,7 @@ from flask import Flask
 def register_v1_blueprints(app: Flask) -> None:
     from app.api.v1.account_routes import bp as account_bp
     from app.api.v1.auth_routes import bp as auth_bp
+    from app.api.v1.budget_routes import bp as budget_bp
     from app.api.v1.category_routes import bp as category_bp
     from app.api.v1.credit_card_routes import bp as credit_card_bp
     from app.api.v1.goal_routes import bp as goal_bp
@@ -18,6 +19,7 @@ def register_v1_blueprints(app: Flask) -> None:
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
     app.register_blueprint(account_bp, url_prefix="/api/v1/accounts")
+    app.register_blueprint(budget_bp, url_prefix="/api/v1/budgets")
     app.register_blueprint(category_bp, url_prefix="/api/v1/categories")
     app.register_blueprint(credit_card_bp, url_prefix="/api/v1/credit-cards")
     app.register_blueprint(goal_bp, url_prefix="/api/v1/goals")
