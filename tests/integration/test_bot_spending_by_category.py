@@ -1,6 +1,9 @@
-"""Fluxo 'Gastos por categoria' (item novo) — mesmo padrão de
+"""Fluxo 'Gastos por categoria' — mesmo padrão de
 test_bot_goal_contribution.py. Nenhuma soma nova: report_service.category_breakdown
-já é usado pelo dashboard web e já cobre conta + cartão juntos."""
+já é usado pelo dashboard web e já cobre conta + cartão juntos.
+
+Passos: período (mês atual/passado/escolher) -> modo (total do mês vs
+categoria específica) -> (categoria, se específica)."""
 
 import pytest
 
@@ -53,7 +56,7 @@ def _reply_event(wa_id, reply_id, message_id="msg-1"):
     }
 
 
-def _setup_expenses(client, headers):
+def _setup_expenses(client, headers, tx_date=None):
     account = client.post(
         "/api/v1/accounts",
         json={"name": "Conta", "type": "checking", "initial_balance": 1000},
@@ -73,7 +76,7 @@ def _setup_expenses(client, headers):
 
     from datetime import date
 
-    today = date.today().isoformat()
+    tx_date = tx_date or date.today().isoformat()
     client.post(
         "/api/v1/transactions",
         json={
@@ -82,7 +85,7 @@ def _setup_expenses(client, headers):
             "type": "expense",
             "description": "compra 1",
             "amount": 100.0,
-            "date": today,
+            "date": tx_date,
         },
         headers=headers,
     )
@@ -95,7 +98,7 @@ def _setup_expenses(client, headers):
             "type": "expense",
             "description": "compra 2 no cartão",
             "amount": 50.0,
-            "date": today,
+            "date": tx_date,
         },
         headers=headers,
     )
@@ -107,7 +110,7 @@ def _setup_expenses(client, headers):
             "type": "expense",
             "description": "cinema",
             "amount": 30.0,
-            "date": today,
+            "date": tx_date,
         },
         headers=headers,
     )
@@ -123,6 +126,7 @@ def test_current_month_total_includes_account_and_card_expenses_together(
     phone = user.phone_number
     conversation._handle_event(_text_event(phone, "16", "m0"))
     conversation._handle_event(_reply_event(phone, "current_month", "m1"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m2"))
 
     text = fake_whatsapp[-1]["args"][0]
     assert "Mercado: R$ 150,00" in text
@@ -135,8 +139,9 @@ def test_specific_category_filters_to_chosen_category_total(client, auth_headers
 
     phone = user.phone_number
     conversation._handle_event(_text_event(phone, "16", "m0"))
-    conversation._handle_event(_reply_event(phone, "specific", "m1"))
-    conversation._handle_event(_reply_event(phone, str(mercado["id"]), "m2"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m1"))
+    conversation._handle_event(_reply_event(phone, "specific", "m2"))
+    conversation._handle_event(_reply_event(phone, str(mercado["id"]), "m3"))
 
     text = fake_whatsapp[-1]["args"][0]
     assert "Mercado" in text
@@ -157,11 +162,12 @@ def test_specific_category_step_has_back_button_first_step_does_not(
     assert first_prompt["kind"] == "buttons"
     assert all(b["id"] != "back" for b in first_prompt["args"][1])
 
-    conversation._handle_event(_reply_event(phone, "specific", "m1"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m1"))
+    conversation._handle_event(_reply_event(phone, "specific", "m2"))
 
-    second_prompt = fake_whatsapp[-1]
-    assert second_prompt["kind"] == "list"
-    rows = second_prompt["args"][2][0]["rows"]
+    last_prompt = fake_whatsapp[-1]
+    assert last_prompt["kind"] == "list"
+    rows = last_prompt["args"][2][0]["rows"]
     assert any(row["id"] == "back" for row in rows)
 
 
@@ -173,12 +179,91 @@ def test_spending_by_category_back_via_reply_id_returns_to_mode_step(
 
     phone = user.phone_number
     conversation._handle_event(_text_event(phone, "16", "m0"))
-    conversation._handle_event(_reply_event(phone, "specific", "m1"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m1"))
+    conversation._handle_event(_reply_event(phone, "specific", "m2"))
 
     state = db.session.query(conversation.BotConversationState).filter_by(user_id=user.id).first()
     assert state.step == "awaiting_category"
 
-    conversation._handle_event(_reply_event(phone, "back", "m2"))
+    conversation._handle_event(_reply_event(phone, "back", "m3"))
 
     state = db.session.query(conversation.BotConversationState).filter_by(user_id=user.id).first()
     assert state.step == "awaiting_mode"
+
+
+def test_last_month_choice_resolves_to_previous_month_only(client, auth_headers, fake_whatsapp):
+    from datetime import date
+
+    user, headers = _register_and_link(client, auth_headers)
+    today = date.today()
+    prev_year, prev_month = (today.year, today.month - 1) if today.month > 1 else (
+        today.year - 1,
+        12,
+    )
+    prev_month_date = date(prev_year, prev_month, 15).isoformat()
+
+    # Gasto no mês passado — deve aparecer.
+    _setup_expenses(client, headers, tx_date=prev_month_date)
+    # Gasto no mês atual — não deve aparecer no resultado de "mês passado".
+    account = client.post(
+        "/api/v1/accounts",
+        json={"name": "Conta 2", "type": "checking", "initial_balance": 1000},
+        headers=headers,
+    ).get_json()["data"]
+    categoria = client.post(
+        "/api/v1/categories", json={"name": "Transporte", "type": "expense"}, headers=headers
+    ).get_json()["data"]
+    client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": account["id"],
+            "category_id": categoria["id"],
+            "type": "expense",
+            "description": "uber",
+            "amount": 20.0,
+            "date": today.isoformat(),
+        },
+        headers=headers,
+    )
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "16", "m0"))
+    conversation._handle_event(_reply_event(phone, "last_month", "m1"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m2"))
+
+    text = fake_whatsapp[-1]["args"][0]
+    assert "Mercado: R$ 150,00" in text
+    assert "Transporte" not in text
+    assert f"{prev_month:02d}/{prev_year:04d}" in text
+
+
+def test_custom_month_invalid_format_reprompts(client, auth_headers, fake_whatsapp):
+    user, headers = _register_and_link(client, auth_headers)
+    _setup_expenses(client, headers)
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "16", "m0"))
+    conversation._handle_event(_reply_event(phone, "custom_month", "m1"))
+    conversation._handle_event(_text_event(phone, "não sei", "m2"))
+
+    state = db.session.query(conversation.BotConversationState).filter_by(user_id=user.id).first()
+    assert state.step == "awaiting_custom_period"
+    assert "inválido" in fake_whatsapp[-1]["args"][0].lower()
+
+
+def test_custom_month_valid_format_works_like_normal_flow(client, auth_headers, fake_whatsapp):
+    from datetime import date
+
+    user, headers = _register_and_link(client, auth_headers)
+    today = date.today()
+    _setup_expenses(client, headers, tx_date=today.isoformat())
+
+    phone = user.phone_number
+    conversation._handle_event(_text_event(phone, "16", "m0"))
+    conversation._handle_event(_reply_event(phone, "custom_month", "m1"))
+    conversation._handle_event(_text_event(phone, f"{today.month:02d}/{today.year:04d}", "m2"))
+    conversation._handle_event(_reply_event(phone, "current_month", "m3"))
+
+    text = fake_whatsapp[-1]["args"][0]
+    assert "Mercado: R$ 150,00" in text
+    assert "Lazer: R$ 30,00" in text
