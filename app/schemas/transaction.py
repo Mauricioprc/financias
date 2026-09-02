@@ -55,6 +55,10 @@ class TransactionOutSchema(Schema):
     updated_at = fields.DateTime()
 
 
+class SuggestCategoryQuerySchema(Schema):
+    description = fields.String(required=True, validate=validate.Length(min=1))
+
+
 class TransactionListQuerySchema(Schema):
     account_id = fields.Integer(required=False)
     category_id = fields.Integer(required=False)

@@ -3,6 +3,7 @@ from app.models.bot_conversation_state import BotConversationState
 from app.models.bot_processed_message import BotProcessedMessage
 from app.models.budget import Budget
 from app.models.category import Category
+from app.models.category_suggestion_pattern import CategorySuggestionPattern
 from app.models.credit_card import CreditCard
 from app.models.goal import Goal
 from app.models.investment import Investment
@@ -20,6 +21,7 @@ __all__ = [
     "BotProcessedMessage",
     "Budget",
     "Category",
+    "CategorySuggestionPattern",
     "CreditCard",
     "Goal",
     "Investment",

@@ -8,7 +8,7 @@ from app.models.account import Account
 from app.models.category import Category
 from app.models.credit_card import CreditCard
 from app.models.transaction import Transaction
-from app.services import invoice_service
+from app.services import category_suggestion_service, invoice_service
 from app.services.exceptions import NotFoundError, ValidationError
 from app.services.ledger_utils import adjust_account_balance
 from app.utils.datetime_utils import shift_date
@@ -132,6 +132,10 @@ def create_transaction(
         adjust_account_balance(account.id, _signed_amount(type, amount))
 
     db.session.add(transaction)
+    # Aprendizado automático e silencioso do padrão descrição->categoria —
+    # não é uma decisão do usuário, só alimenta sugestões futuras (ver
+    # category_suggestion_service.suggest_category).
+    category_suggestion_service.record_pattern(user_id, description, category_id)
     db.session.commit()
     return transaction
 
@@ -255,6 +259,9 @@ def _update_card_transaction(user_id: int, transaction: Transaction, fields: dic
         if key in fields and fields[key] is not None:
             setattr(transaction, key, fields[key])
 
+    category_suggestion_service.record_pattern(
+        user_id, transaction.description, transaction.category_id
+    )
     db.session.commit()
     return transaction
 
@@ -284,6 +291,9 @@ def _update_regular_transaction(
     new_effect = _signed_amount(transaction.type, new_amount) if new_is_paid else Decimal(0)
     adjust_account_balance(new_account.id, new_effect)
 
+    category_suggestion_service.record_pattern(
+        user_id, transaction.description, transaction.category_id
+    )
     db.session.commit()
     return transaction
 

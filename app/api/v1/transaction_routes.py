@@ -3,12 +3,13 @@ from flask import Blueprint, jsonify
 from app.api.decorators import require_user, validate_json, validate_query
 from app.schemas.transaction import (
     InstallmentPurchaseCreateSchema,
+    SuggestCategoryQuerySchema,
     TransactionCreateSchema,
     TransactionListQuerySchema,
     TransactionOutSchema,
     TransactionUpdateSchema,
 )
-from app.services import transaction_service
+from app.services import category_suggestion_service, transaction_service
 
 bp = Blueprint("transactions", __name__)
 
@@ -17,6 +18,7 @@ update_schema = TransactionUpdateSchema()
 out_schema = TransactionOutSchema()
 list_query_schema = TransactionListQuerySchema()
 installment_purchase_schema = InstallmentPurchaseCreateSchema()
+suggest_category_query_schema = SuggestCategoryQuerySchema()
 
 
 @bp.route("", methods=["GET"])
@@ -78,6 +80,14 @@ def create_installment_purchase_route(payload, user_id):
         notes=payload["notes"],
     )
     return jsonify({"data": out_schema.dump(transactions, many=True), "meta": {}}), 201
+
+
+@bp.route("/suggest-category", methods=["GET"])
+@require_user
+@validate_query(suggest_category_query_schema)
+def suggest_category_route(query, user_id):
+    category_id = category_suggestion_service.suggest_category(user_id, query["description"])
+    return jsonify({"data": {"category_id": category_id}, "meta": {}})
 
 
 @bp.route("/<int:transaction_id>", methods=["GET"])
