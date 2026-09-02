@@ -231,6 +231,28 @@ const Api = (() => {
         get(`/insights/balance-forecast/${accountId}`).then((r) => r.data),
     },
 
+    budgets: {
+      list: () => get("/budgets").then((r) => r.data),
+      progress: () => get("/budgets/progress").then((r) => r.data),
+      create: (data) => post("/budgets", data).then((r) => r.data),
+      update: (id, data) => patch(`/budgets/${id}`, data).then((r) => r.data),
+      remove: (id) => del(`/budgets/${id}`),
+    },
+
+    categorySuggestion: {
+      suggest: (description) =>
+        get("/transactions/suggest-category", { description }).then((r) => r.data),
+    },
+
+    netWorth: {
+      history: (months) => get("/net-worth/history", { months }).then((r) => r.data),
+      today: () => get("/net-worth/today").then((r) => r.data),
+    },
+
+    upcomingBills: {
+      list: (days) => get("/upcoming-bills", { days }).then((r) => r.data),
+    },
+
     reports: {
       balanceHistory: (days) => get("/reports/balance-history", { days }).then((r) => r.data),
       categoryBreakdown: (month, type) =>

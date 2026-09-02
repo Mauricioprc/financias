@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { path: "/reports", icon: "bar-chart-3", label: "Relatórios" },
   { path: "/transfers", icon: "arrow-left-right", label: "Transferências" },
   { path: "/categories", icon: "tag", label: "Categorias" },
+  { path: "/budgets", icon: "wallet", label: "Orçamentos" },
   { path: "/recurring", icon: "refresh-cw", label: "Recorrências" },
   { path: "/goals", icon: "target", label: "Metas" },
   { path: "/investments", icon: "trending-up", label: "Investimentos" },

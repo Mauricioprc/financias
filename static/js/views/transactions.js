@@ -17,6 +17,31 @@ function categoryOptionsWithAdd(categories, type) {
   ]);
 }
 
+/* Sugestão automática de categoria (GET /transactions/suggest-category) — só
+   dispara no blur (não a cada tecla) e só preenche se a categoria ainda
+   estiver vazia, nunca sobrescrevendo escolha manual. Best-effort: falha
+   silenciosa (console.warn), nunca trava o formulário. Compartilhado entre
+   o modal de criação e o de edição — ambos têm os mesmos dois campos. */
+function attachCategorySuggestion(form) {
+  const descriptionInput = UI.qs('input[name="description"]', form);
+  const categorySelect = UI.qs('select[name="category_id"]', form);
+  if (!descriptionInput || !categorySelect) return;
+
+  descriptionInput.addEventListener("blur", async () => {
+    const description = descriptionInput.value.trim();
+    if (!description || categorySelect.value) return;
+    try {
+      const { category_id } = await Api.categorySuggestion.suggest(description);
+      if (category_id && !categorySelect.value) {
+        categorySelect.value = String(category_id);
+        UI.toast("Categoria sugerida com base em lançamentos anteriores.", "info");
+      }
+    } catch (err) {
+      console.warn("Falha ao buscar sugestão de categoria:", err);
+    }
+  });
+}
+
 /* Modal de criação de transação, reaproveitado pela tela de Transações e pelo
    botão de lançamento rápido da Home. `onCreated` roda após salvar com sucesso. */
 function openCreateTransactionModal(accounts, categories, creditCards, onCreated) {
@@ -116,6 +141,8 @@ function openCreateTransactionModal(accounts, categories, creditCards, onCreated
   creditCardSelect.addEventListener("change", updateInstallmentsVisibility);
   accountSelect.addEventListener("change", () => fillCreditCardSelect(accountSelect.value));
   fillCreditCardSelect(accountSelect.value); // aplica o auto-select já na abertura do modal
+
+  attachCategorySuggestion(form);
 
   function fillCategorySelect(selectedValue = "") {
     categorySelect.innerHTML = "";
@@ -477,6 +504,7 @@ async function renderTransactionsView(container) {
     }
 
     const form = UI.buildForm(fields, t);
+    attachCategorySuggestion(form);
     if (isCardTransaction) {
       form.prepend(
         UI.el(

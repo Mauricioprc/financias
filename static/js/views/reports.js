@@ -10,13 +10,17 @@ async function renderReportsView(container) {
   let creditCards;
   let goals;
   let insightsSummary;
+  let netWorthToday;
+  let netWorthHistory;
   try {
-    [creditCards, goals, insightsSummary] = await Promise.all([
+    [creditCards, goals, insightsSummary, netWorthToday, netWorthHistory] = await Promise.all([
       Api.creditCards.list(),
       Api.goals.list(),
       // Enriquecimento, não crítico — sem isso a tela segue funcionando,
       // só sem a seção de comparação por categoria.
       Api.insights.summary().catch(() => null),
+      Api.netWorth.today().catch(() => null),
+      Api.netWorth.history(12).catch(() => null),
     ]);
   } catch (err) {
     container.innerHTML = "";
@@ -30,6 +34,9 @@ async function renderReportsView(container) {
 
   container.innerHTML = "";
   container.appendChild(UI.el("h1", { class: "page-title" }, "Relatórios"));
+
+  const theme = ChartTheme.applyDefaults();
+  renderNetWorthSection();
 
   const grid = UI.el("div", { class: "report-grid" });
   container.appendChild(grid);
@@ -78,8 +85,6 @@ async function renderReportsView(container) {
   const goalsCard = UI.el("div", { class: "list" });
   container.appendChild(UI.el("div", { class: "section-title" }, "Progresso das metas"));
   container.appendChild(goalsCard);
-
-  const theme = ChartTheme.applyDefaults();
 
   let summary;
   try {
@@ -246,6 +251,87 @@ async function renderReportsView(container) {
     const comparisonList = UI.el("div", { class: "list" });
     categoryComparison.forEach((item) => comparisonList.appendChild(categoryComparisonRow(item)));
     container.appendChild(comparisonList);
+  }
+
+  /* Patrimônio líquido — GET /net-worth/today (contas + investimentos -
+     faturas em aberto, hoje) e /net-worth/history (só contas, últimos 12
+     meses). São métricas DIFERENTES de propósito: o histórico mensal é só
+     contas (dado confiável ao longo do tempo — ver net_worth_service.py),
+     "hoje" inclui investimento. O gráfico abaixo deixa isso explícito no
+     título pra não confundir com o tile "Patrimônio líquido" (que é o
+     total de hoje) nem com "Evolução do saldo (30 dias)" da Home — essa
+     é uma janela curta de dias, não um histórico mensal de 12 meses. */
+  function renderNetWorthSection() {
+    if (!netWorthToday && !netWorthHistory) return; // enriquecimento — sem dado, sem seção
+
+    container.appendChild(UI.el("div", { class: "section-title" }, "Patrimônio líquido"));
+
+    if (netWorthToday) {
+      container.appendChild(
+        UI.el("div", { class: "tiles" }, [
+          UI.el("div", { class: "tile tile--wide" }, [
+            UI.el("div", { class: "tile__label" }, "Patrimônio líquido (hoje)"),
+            UI.el("div", { class: "tile__value" }, UI.money(netWorthToday.net_worth)),
+          ]),
+          UI.el("div", { class: "tile" }, [
+            UI.el("div", { class: "tile__label" }, "Contas"),
+            UI.el("div", { class: "tile__value" }, UI.money(netWorthToday.accounts_total)),
+          ]),
+          UI.el("div", { class: "tile" }, [
+            UI.el("div", { class: "tile__label" }, "Investimentos"),
+            UI.el("div", { class: "tile__value" }, UI.money(netWorthToday.investments_total)),
+          ]),
+          UI.el("div", { class: "tile" }, [
+            UI.el("div", { class: "tile__label" }, "Faturas em aberto"),
+            UI.el(
+              "div",
+              { class: "tile__value value--negative" },
+              "- " + UI.money(netWorthToday.unpaid_invoices_total)
+            ),
+          ]),
+        ])
+      );
+    }
+
+    if (netWorthHistory && netWorthHistory.length > 0) {
+      const canvasWrap = UI.el("div", { class: "chart-card__canvas-wrap" }, [UI.el("canvas", {})]);
+      container.appendChild(
+        UI.el("div", { class: "card" }, [
+          UI.el(
+            "div",
+            { class: "chart-card__title" },
+            "Patrimônio em contas — últimos 12 meses"
+          ),
+          canvasWrap,
+        ])
+      );
+
+      new Chart(UI.qs("canvas", canvasWrap), {
+        type: "line",
+        data: {
+          labels: netWorthHistory.map((h) => h.month),
+          datasets: [
+            {
+              data: netWorthHistory.map((h) => Number(h.total_accounts_balance)),
+              borderColor: theme.accent,
+              backgroundColor: theme.accent + "22",
+              fill: true,
+              tension: 0.3,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+          ],
+        },
+        options: {
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false } },
+            y: { ticks: { callback: (v) => UI.money(v) }, grid: { color: theme.border } },
+          },
+        },
+      });
+    }
   }
 }
 

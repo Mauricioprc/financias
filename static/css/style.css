@@ -1024,3 +1024,98 @@ a {
     max-width: 1040px;
   }
 }
+
+/* ---------- Timeline (próximos vencimentos) ---------- */
+
+.timeline {
+  display: flex;
+  gap: 28px;
+  overflow-x: auto;
+  padding: 24px 16px 16px;
+}
+
+.timeline__marker {
+  position: relative;
+  flex: 0 0 auto;
+  width: 140px;
+  text-align: center;
+}
+
+/* Linha conectando o centro deste marco ao centro do próximo — largura
+   fixa (100% do marco + o gap) porque marker e gap têm tamanho fixo em
+   CSS, então dá pra alcançar exatamente o próximo ponto sem medir nada
+   via JS. */
+.timeline__marker:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: calc(100% + 28px);
+  height: 2px;
+  background: var(--border);
+  z-index: 0;
+}
+
+.timeline__dot {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  margin: 0 auto 10px;
+  border-radius: 999px;
+  background: var(--gray-500);
+  border: 3px solid var(--bg);
+}
+
+.timeline__dot--urgent {
+  background: var(--danger);
+}
+
+.timeline__dot--soon {
+  background: var(--warning);
+}
+
+.timeline__date {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--gray-500);
+  margin-bottom: 10px;
+}
+
+.timeline__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.timeline__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.timeline__card-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline__card-amount {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.timeline__legend-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  margin-left: 4px;
+  vertical-align: middle;
+}

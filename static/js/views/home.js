@@ -95,6 +95,18 @@ async function renderHomeView(container) {
       ])
     );
 
+    container.appendChild(
+      UI.el(
+        "button",
+        {
+          class: "btn btn--secondary btn--sm",
+          style: "margin-bottom:16px",
+          onclick: () => Router.navigate("/upcoming-bills"),
+        },
+        "Ver próximos vencimentos →"
+      )
+    );
+
     await renderCharts();
 
     container.appendChild(UI.el("div", { class: "section-title" }, "Contas"));
