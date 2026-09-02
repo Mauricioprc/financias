@@ -16,6 +16,7 @@ def register_v1_blueprints(app: Flask) -> None:
     from app.api.v1.report_routes import bp as report_bp
     from app.api.v1.transaction_routes import bp as transaction_bp
     from app.api.v1.transfer_routes import bp as transfer_bp
+    from app.api.v1.upcoming_bill_routes import bp as upcoming_bill_bp
     from app.api.v1.user_routes import bp as user_bp
 
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
@@ -34,4 +35,5 @@ def register_v1_blueprints(app: Flask) -> None:
     app.register_blueprint(report_bp, url_prefix="/api/v1/reports")
     app.register_blueprint(transaction_bp, url_prefix="/api/v1/transactions")
     app.register_blueprint(transfer_bp, url_prefix="/api/v1/transfers")
+    app.register_blueprint(upcoming_bill_bp, url_prefix="/api/v1/upcoming-bills")
     app.register_blueprint(user_bp, url_prefix="/api/v1/users")
