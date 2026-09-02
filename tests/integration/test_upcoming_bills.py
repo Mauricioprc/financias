@@ -146,6 +146,97 @@ def test_inactive_recurring_does_not_appear(client, auth_headers):
     )
 
 
+def test_card_linked_recurring_shows_as_recurring_on_invoice_not_recurring(client, auth_headers):
+    headers = auth_headers()
+    account_id = _account(client, headers)
+    resp = client.post(
+        "/api/v1/credit-cards",
+        json={"name": "Cartão", "credit_limit": 3000.0, "closing_day": 25, "due_day": 5},
+        headers=headers,
+    )
+    card_id = resp.get_json()["data"]["id"]
+
+    today = date.today()
+    recurring_day = (today + timedelta(days=2)).day
+    resp = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Streaming",
+            "type": "expense",
+            "amount": 40.0,
+            "frequency": "monthly",
+            "day_of_month": recurring_day,
+            "start_date": today.isoformat(),
+        },
+        headers=headers,
+    )
+    recurring_id = resp.get_json()["data"]["id"]
+
+    resp = client.get("/api/v1/upcoming-bills", query_string={"days": 30}, headers=headers)
+    items = resp.get_json()["data"]
+
+    matching = [item for item in items if item["reference_id"] == recurring_id]
+    assert len(matching) == 1
+    assert matching[0]["type"] == "recurring_on_invoice"
+    assert "Streaming" in matching[0]["label"]
+    assert "Cartão" in matching[0]["label"]
+    assert not any(
+        item["type"] == "recurring" and item["reference_id"] == recurring_id for item in items
+    )
+
+
+def test_card_linked_recurring_not_duplicated_when_invoice_already_exists(client, auth_headers):
+    headers = auth_headers()
+    account_id = _account(client, headers)
+    resp = client.post(
+        "/api/v1/credit-cards",
+        json={"name": "Cartão", "credit_limit": 3000.0, "closing_day": 25, "due_day": 5},
+        headers=headers,
+    )
+    card_id = resp.get_json()["data"]["id"]
+
+    today = date.today()
+    recurring_day = (today + timedelta(days=2)).day
+    resp = client.post(
+        "/api/v1/recurring-transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "description": "Streaming",
+            "type": "expense",
+            "amount": 40.0,
+            "frequency": "monthly",
+            "day_of_month": recurring_day,
+            "start_date": today.isoformat(),
+        },
+        headers=headers,
+    )
+    recurring_id = resp.get_json()["data"]["id"]
+
+    # Uma compra de verdade no cartão, no mesmo período de fatura da
+    # ocorrência da recorrência, já cria o Invoice — a partir daí a
+    # recorrência não deve mais gerar uma entrada "recurring_on_invoice"
+    # solta (seria duplicar o que a fatura real já mostra).
+    client.post(
+        "/api/v1/transactions",
+        json={
+            "account_id": account_id,
+            "credit_card_id": card_id,
+            "type": "expense",
+            "description": "compra",
+            "amount": 100.0,
+            "date": today.isoformat(),
+        },
+        headers=headers,
+    )
+
+    resp = client.get("/api/v1/upcoming-bills", query_string={"days": 30}, headers=headers)
+    items = resp.get_json()["data"]
+    assert not any(item["reference_id"] == recurring_id for item in items)
+
+
 def test_days_over_max_is_validation_error_not_hang(client, auth_headers):
     headers = auth_headers()
     resp = client.get("/api/v1/upcoming-bills", query_string={"days": 91}, headers=headers)

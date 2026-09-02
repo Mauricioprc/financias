@@ -95,7 +95,8 @@ def handle_upcoming_bills(user) -> None:
     for date_label, day_bills in grouped.items():
         lines.append(f"📅 {date_label}")
         for bill in day_bills:
-            lines.append(f"  • {bill['label']} — {money(abs(bill['amount']))}")
+            prefix = "🔁💳 " if bill["type"] == "recurring_on_invoice" else ""
+            lines.append(f"  • {prefix}{bill['label']} — {money(abs(bill['amount']))}")
         lines.append("")
 
     if truncated_count:

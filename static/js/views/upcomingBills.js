@@ -11,8 +11,8 @@ function shortDateBR(isoDate) {
 }
 
 function upcomingBillAmountDisplay(bill) {
-  if (bill.type === "invoice") {
-    // Fatura: sempre saldo devedor, sempre despesa.
+  if (bill.type === "invoice" || bill.type === "recurring_on_invoice") {
+    // Fatura (ou recorrência que vai entrar numa fatura): sempre despesa.
     return { text: "- " + UI.money(bill.amount), className: "value--negative" };
   }
   const amount = Number(bill.amount);
@@ -80,8 +80,11 @@ async function renderUpcomingBillsView(container) {
       const dayBills = billsByDate[date];
       const cards = dayBills.map((bill) => {
         const { text, className } = upcomingBillAmountDisplay(bill);
+        // Recorrência que vai entrar numa fatura: mesmo emoji usado pelo bot,
+        // pra deixar claro que não é um vencimento à parte.
+        const label = bill.type === "recurring_on_invoice" ? `🔁💳 ${bill.label}` : bill.label;
         return UI.el("div", { class: "timeline__card" }, [
-          UI.el("div", { class: "timeline__card-label" }, bill.label),
+          UI.el("div", { class: "timeline__card-label" }, label),
           UI.el("div", { class: `timeline__card-amount ${className}` }, text),
         ]);
       });
